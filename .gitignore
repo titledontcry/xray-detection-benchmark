@@ -1,0 +1,56 @@
+# === Data (never commit — use DVC or rsync/rclone instead) ===
+data/raw/
+data/processed/
+data/pidray/
+data/opixray/
+data/sixray/
+*.jpg
+*.jpeg
+*.png
+!assets/**/*.png
+!assets/**/*.jpg
+
+# === Checkpoints / logs / experiment outputs ===
+experiments/
+checkpoints/
+runs/
+wandb/
+mlruns/
+outputs/
+*.pt
+*.pth
+*.onnx
+*.engine
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+*.egg
+.venv/
+.venv-tools/
+venv/
+env/
+.mypy_cache/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# === Conda ===
+*.conda
+
+# === Environment secrets ===
+.env
+*.env.local
+
+# === OS ===
+.DS_Store
+Thumbs.db
+
+# === IDE ===
+.vscode/settings.json
+.idea/
+
+# === DVC (keep .dvc pointer files, ignore cache) ===
+/.dvc/cache
+/.dvc/tmp
