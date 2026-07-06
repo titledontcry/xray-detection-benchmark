@@ -1,0 +1,37 @@
+dataset_name: pidray
+num_classes: 12
+categories:
+  - gun
+  - knife
+  - wrench
+  - pliers
+  - scissors
+  - hammer
+  - handcuffs
+  - baton
+  - sprayer
+  - powerbank
+  - lighter
+  - bullet
+
+paths:
+  raw_dir: data/raw/pidray
+  processed_images: data/processed/images
+  coco_json: data/processed/pidray_coco.json
+  split_dir: data/splits
+
+split:
+  train: 0.70
+  val: 0.15
+  test: 0.15
+  seed: 42
+  strategy: multilabel_stratified   # image-level, not vehicle-level
+
+preprocessing:
+  clahe:
+    clip_limit: 2.0
+    tile_grid_size: 8
+  augmentation:
+    color_jitter: false   # excluded — inappropriate for X-ray domain
+    horizontal_flip: true
+    random_crop: true

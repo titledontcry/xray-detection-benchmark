@@ -1,0 +1,20 @@
+name: deimv2
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      - torch>=2.0
+      - torchvision
+      - pycocotools
+      - pyyaml
+      - opencv-python
+      - wandb
+      - tensorboard
+      - scipy
+      - numpy
+      # install DEIMv2 itself from the cloned repo:
+      # pip install -e /path/to/DEIMv2 (after `git clone https://github.com/Intellindust-AI-Lab/DEIMv2`)

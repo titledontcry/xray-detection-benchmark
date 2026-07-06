@@ -1,0 +1,112 @@
+# PLAN.md — X-ray Detection Benchmark (Single Source of Truth)
+
+> **วิธีใช้ไฟล์นี้**: ทุกครั้งที่เริ่มแชทใหม่กับ Claude ให้แนบไฟล์นี้ไปด้วยเพื่อให้ได้ context ครบ
+> ทำขั้นตอนเสร็จ → ติ๊ก checkbox → commit
+> ตัดสินใจอะไรใหม่ → บันทึกใน Decision Log ท้ายไฟล์ พร้อมวันที่และเหตุผล
+
+**Last updated**: 2026-07-06
+**Current phase**: Phase 0-1 (setup + data preparation)
+
+---
+
+## 1. Project Overview
+
+**Goal**: Publication-quality benchmark of 3 object detectors on X-ray security imagery,
+framed as AI research (not just engineering comparison).
+
+**Models**: DEIMv2, D-FINE (DETR-based) vs YOLO11 (CNN one-stage)
+
+**Primary dataset**: PIDray — public baggage X-ray, 12 classes, no access request needed
+- Source: https://github.com/bywang2018/security-dataset (or HF: Voxel51/PIDray)
+- 47,677 images; official train 29,457 / official test 18,220 (Easy 9,482 / Hard 3,773 / Hidden 5,005)
+- Classes: gun, knife, wrench, pliers, scissors, hammer, handcuffs, baton, sprayer, powerbank, lighter, bullet
+- License: academic/non-commercial only
+
+**Cross-dataset targets (RQ3)**: OPIXray (email request: rstao@buaa.edu.cn), SIXray test set (bbox via SIXray-D, gated form at ROSE Lab NTU)
+
+## 2. Research Questions
+
+| RQ | Question | Data used |
+|----|----------|-----------|
+| RQ1 | DETR-based vs CNN one-stage on X-ray occlusion/overlap challenges | PIDray (esp. Hard/Hidden test) |
+| RQ2 | Resolution handling / tiling effects on AP-small | PIDray (revisit SAHI need after EDA) |
+| RQ3 | Cross-dataset domain gap within baggage X-ray | Train PIDray → test OPIXray / SIXray |
+| RQ4 | Operational detection rate @ fixed false-alarm rate | PIDray Hidden subset = stress test |
+
+## 3. Key Decisions (locked)
+
+- ✅ **Split**: use PIDray OFFICIAL test split (Easy/Hard/Hidden) for literature comparability.
+  Only official train (29,457) gets split by us: **train 85% / val 15%**, multi-label stratified, **seed=42**.
+  Official test is NEVER touched until Phase 5.
+- ✅ **Master annotation format**: single COCO JSON → converted per-model (YOLO txt for YOLO11).
+- ✅ **Augmentation policy identical across all 3 models**: flip/crop OK, **NO color jitter / NO HSV**
+  (X-ray domain). Must override each repo's defaults (e.g., disable YOLO11 HSV jitter).
+- ✅ **Preprocessing**: CLAHE (clip=2.0, grid=8×8) — decide pre-compute vs on-the-fly after seeing data size.
+- ✅ **HPO tool**: Optuna with ASHA/Hyperband pruning; ~20-30 trials/model; tune on val ONLY; 1 seed
+  during HPO, then 3 seeds on final config only.
+- ✅ **HPO search space**: DETR models: lr, weight decay, warmup epochs, aux loss weight.
+  YOLO11: lr, box/cls loss weight ratio, mosaic prob, weight decay. Architecture params frozen.
+- ✅ **Evaluation stack**: pycocotools (mAP@50-95, AP-S/M/L), TIDE (error types), ECE (calibration),
+  detection rate @ fixed FAR (RQ4), paired bootstrap (significance), Pareto accuracy-vs-latency.
+- ✅ **Workflow**: dev on Mac (VSCode) → GitHub → pull on server (GPU). Data synced OUTSIDE git.
+  Experiment tracking: Weights & Biases. Separate conda env per model (3 envs).
+- ✅ Report results separately per Easy/Hard/Hidden subset.
+
+## 4. Phase Checklist
+
+### Phase 0 — Setup (week 1)
+- [ ] 0.1 Create GitHub repo, push project skeleton
+- [ ] 0.2 Server: git clone
+- [ ] 0.3 Server: create 3 conda envs (deimv2 / dfine / yolo11) — `scripts/setup_env.sh`
+- [ ] 0.4 wandb account + API key on server (.env, gitignored)
+- [ ] 0.5 (optional) VSCode Remote-SSH from Mac to server
+
+### Phase 1 — Data (weeks 1-2)
+- [ ] 1.1 Download PIDray to server `data/raw/` (`scripts/sync_data.sh`; find real image link in repo README)
+- [ ] 1.2 EDA notebook: annotation format? image sizes? class distribution? official split structure?
+      → decide: is SAHI tiling needed (RQ2)? pre-compute vs on-the-fly CLAHE?
+- [x] 1.3 CONFIRMED: PIDray ships in COCO format (mmdet CocoDataset; xray_train.json + xray_test_{easy,hard,hidden}.json) → no converter needed, only run `src/data/validate_coco.py`
+- [ ] 1.4 Split official train → train/val (85/15, multi-label stratified, seed=42)
+      → commit `data/splits/*.json` (image-id lists only — small files, git OK)
+- [ ] 1.5 Preprocessing + shared augmentation config
+- [ ] 1.6 **Sanity check (mandatory)**: visualize 100 random images with bboxes; verify COCO→YOLO
+      conversion preserves boxes; count instances per class per split
+
+### Phase 2 — Baselines (weeks 2-4)
+- [ ] Train all 3 models with paper-default hyperparameters (no tuning)
+- [ ] Verify losses converge; record time/epoch → informs HPO budget
+- [ ] Log baseline mAP as sanity floor
+
+### Phase 3 — HPO (Optuna)
+- [ ] Optuna study per model, ASHA pruning, val-set objective, SQLite storage for resume
+- [ ] Lock best config per model
+
+### Phase 4 — Final training (weeks 5-7)
+- [ ] 3 seeds × best config × 3 models; save all checkpoints
+
+### Phase 5 — Evaluation (weeks 8-10)
+- [ ] Full metric suite on official test (per Easy/Hard/Hidden)
+- [ ] Cross-dataset eval (RQ3) on OPIXray/SIXray — request access EARLY (long lead time)
+- [ ] TIDE, ECE, FAR analysis, bootstrap significance, Pareto curves
+
+### Phase 6 — Write-up (weeks 10-12)
+- [ ] Paper draft, model cards, reproducibility package (env lockfiles, split files, configs)
+
+## 5. Risks / Watch-outs
+
+- OPIXray + SIXray-D access requests take time → **submit requests during Phase 1, not Phase 5**
+- PIDray long-tail imbalance → may need class-weighted loss; check per-class AP early
+- 3 repos have conflicting dependencies → never merge conda envs
+- HPO compute vs 3-seed budget conflict → HPO with 1 seed only, 3 seeds only for finals
+
+## 6. Decision Log
+
+| Date | Decision | Reason |
+|------|----------|--------|
+| 2026-07-06 | Dropped cargo datasets (CargoXray/CargoX/SoC) | All gated/proprietary; dvc pull on CargoXray requires private Google Drive OAuth |
+| 2026-07-06 | Dropped SIXray as primary | Detection bboxes (SIXray-D) require gated access request at ROSE Lab |
+| 2026-07-06 | **PIDray = primary dataset** | Fully public, 12 classes, COCO-style bbox+masks, built-in Easy/Hard/Hidden test |
+| 2026-07-06 | RQ3 reframed to within-baggage cross-dataset gap | No accessible cargo target domain |
+| 2026-07-06 | Use official PIDray test split | Literature comparability; free difficulty breakdown |
+| 2026-07-06 | Optuna chosen for HPO | Pruning support, resumable studies, PyTorch integration |
+| 2026-07-06 | No COCO converter needed | Verified from official repo config: PIDray annotations are already COCO JSON |
