@@ -30,7 +30,7 @@ ZIP="$DEST/pidray.zip"
 if [ -f "$ZIP" ]; then
   echo "$ZIP already exists — skipping download."
 else
-  "$VENV/bin/gdown" --id "$GDRIVE_ID" -O "$ZIP"
+  "$VENV/bin/gdown" "$GDRIVE_ID" -O "$ZIP"
 fi
 
 # --- 3. Extract (skip if already extracted) ---
