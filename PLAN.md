@@ -55,15 +55,15 @@ framed as AI research (not just engineering comparison).
 ## 4. Phase Checklist
 
 ### Phase 0 — Setup (week 1)
-- [ ] 0.1 Create GitHub repo, push project skeleton
-- [ ] 0.2 Server: git clone
-- [ ] 0.3 Server: create 3 conda envs (deimv2 / dfine / yolo11) — `scripts/setup_env.sh`
-- [ ] 0.4 wandb account + API key on server (.env, gitignored)
+- [x] 0.1 Create GitHub repo, push project skeleton
+- [x] 0.2 Server: git clone
+- [x] 0.3 Server: create 3 conda envs (deimv2 / dfine / yolo11) — `scripts/setup_env.sh`
+- [x] 0.4 wandb account + API key on server (.env, gitignored)
 - [ ] 0.5 (optional) VSCode Remote-SSH from Mac to server
 
 ### Phase 1 — Data (weeks 1-2)
-- [ ] 1.1 Download PIDray to server `data/raw/` (`scripts/sync_data.sh`; find real image link in repo README)
-- [ ] 1.2 EDA notebook: annotation format? image sizes? class distribution? official split structure?
+- [x] 1.1 Download PIDray to server `data/raw/` (`scripts/sync_data.sh`; find real image link in repo README)
+- [x] 1.2 EDA notebook: annotation format? image sizes? class distribution? official split structure?
       → decide: is SAHI tiling needed (RQ2)? pre-compute vs on-the-fly CLAHE?
 - [x] 1.3 CONFIRMED: PIDray ships in COCO format (mmdet CocoDataset; xray_train.json + xray_test_{easy,hard,hidden}.json) → no converter needed, only run `src/data/validate_coco.py`
 - [ ] 1.4 Split official train → train/val (85/15, multi-label stratified, seed=42)
