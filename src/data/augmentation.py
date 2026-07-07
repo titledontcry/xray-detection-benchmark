@@ -34,7 +34,13 @@ import albumentations as A
 
 
 def _clahe_only(clip_limit: float, tile_grid_size: int) -> list:
-    return [A.CLAHE(clip_limit=clip_limit,
+    # albumentations treats a scalar clip_limit as a (1, clip_limit) RANGE
+    # and samples a random value from it per call — passing (clip_limit,
+    # clip_limit) is required to get the fixed, deterministic value the
+    # locked preprocessing decision calls for (CLAHE is preprocessing, not
+    # augmentation; it must not vary run to run). Verified via
+    # A.CLAHE(clip_limit=2.0).get_params() returning random values in [1, 2].
+    return [A.CLAHE(clip_limit=(clip_limit, clip_limit),
                      tile_grid_size=(tile_grid_size, tile_grid_size),
                      p=1.0)]
 

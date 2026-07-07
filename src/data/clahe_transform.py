@@ -43,8 +43,13 @@ def make_clahe_transform_class(register, transform_base_cls, transformed_types):
 
         def __init__(self, clip_limit: float = 2.0, tile_grid_size: int = 8):
             super().__init__()
+            # albumentations treats a scalar clip_limit as a (1, clip_limit)
+            # RANGE and samples a random value per call — (clip_limit,
+            # clip_limit) is required for the fixed, deterministic value
+            # this preprocessing step is supposed to have (see
+            # src/data/augmentation.py's _clahe_only for the same fix).
             self._clahe = A.CLAHE(
-                clip_limit=clip_limit,
+                clip_limit=(clip_limit, clip_limit),
                 tile_grid_size=(tile_grid_size, tile_grid_size),
                 p=1.0,
             )

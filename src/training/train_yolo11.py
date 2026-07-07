@@ -42,7 +42,12 @@ def main():
     # of configs/model/yolo11/yolo11s_pidray.yaml. Same clip/grid as
     # src/data/augmentation.py and src/data/clahe_transform.py — one CLAHE
     # definition, three models.
-    cfg["augmentations"] = [A.CLAHE(clip_limit=2.0, tile_grid_size=(8, 8), p=1.0)]
+    #
+    # clip_limit=(2.0, 2.0), not 2.0: albumentations treats a scalar as a
+    # (1, clip_limit) RANGE and samples a random value per call — confirmed
+    # via .get_params() returning values scattered across [1, 2]. This
+    # preprocessing step must be fixed/deterministic, not randomized.
+    cfg["augmentations"] = [A.CLAHE(clip_limit=(2.0, 2.0), tile_grid_size=(8, 8), p=1.0)]
 
     model_name = cfg.pop("model")
     model = YOLO(model_name)
