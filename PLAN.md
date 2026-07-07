@@ -68,7 +68,7 @@ framed as AI research (not just engineering comparison).
 - [x] 1.3 CONFIRMED: PIDray ships in COCO format (mmdet CocoDataset; xray_train.json + xray_test_{easy,hard,hidden}.json) → no converter needed, only run `src/data/validate_coco.py`
 - [x] 1.4 Split official train → train/val (85/15, multi-label stratified, seed=42)
       → commit `data/splits/*.json` (image-id lists only — small files, git OK)
-- [ ] 1.5 Preprocessing + shared augmentation config
+- [x] 1.5 Preprocessing + shared augmentation config
 - [ ] 1.6 **Sanity check (mandatory)**: visualize 100 random images with bboxes; verify COCO→YOLO
       conversion preserves boxes; count instances per class per split
 
@@ -110,3 +110,5 @@ framed as AI research (not just engineering comparison).
 | 2026-07-06 | Use official PIDray test split | Literature comparability; free difficulty breakdown |
 | 2026-07-06 | Optuna chosen for HPO | Pruning support, resumable studies, PyTorch integration |
 | 2026-07-06 | No COCO converter needed | Verified from official repo config: PIDray annotations are already COCO JSON |
+| 2026-07-07 | CLAHE runs on-the-fly, not pre-computed | HPO (20-30 trials/model) needs to sweep clip/grid without re-processing ~47k images per trial; keeps disk usage flat |
+| 2026-07-07 | Shared augmentation policy implemented via `albumentations` in `src/data/augmentation.py` | Cross-framework library that DEIMv2/D-FINE/YOLO11 dataloaders can all wrap, keeping one source of truth for CLAHE+flip+crop and enforcing no-color-jitter rule identically |

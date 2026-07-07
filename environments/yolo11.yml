@@ -8,6 +8,7 @@ dependencies:
   - pip
   - pip:
       - ultralytics
+      - albumentations
       - pycocotools
       - wandb
       - scipy

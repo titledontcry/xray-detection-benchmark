@@ -30,9 +30,11 @@ split:
 
 preprocessing:
   clahe:
+    mode: on_the_fly   # decided 2026-07-07 — see PLAN.md Decision Log
     clip_limit: 2.0
     tile_grid_size: 8
   augmentation:
+    library: albumentations   # src/data/augmentation.py is the single source of truth
     color_jitter: false   # excluded — inappropriate for X-ray domain
     horizontal_flip: true
     random_crop: true

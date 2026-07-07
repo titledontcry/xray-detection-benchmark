@@ -12,6 +12,7 @@ dependencies:
       - pycocotools
       - pyyaml
       - opencv-python
+      - albumentations
       - wandb
       - tensorboard
       - scipy
