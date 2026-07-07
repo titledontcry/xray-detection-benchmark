@@ -1,0 +1,23 @@
+# ultralytics training args (passed to YOLO(...).train(cfg=this_file)).
+# YOLO11 has no published "paper defaults" the way DEIMv2/D-FINE do — the
+# closest equivalent is ultralytics' own untouched default.yaml (epochs,
+# batch, optimizer, mosaic/mixup/scale/translate augmentation), so per
+# Phase 2's "no tuning" rule we leave everything at ultralytics' defaults
+# EXCEPT what CLAUDE.md's hard rules require us to change:
+#   - hsv_h/hsv_s/hsv_v = 0: no color/HSV jitter for X-ray imagery (rule #3).
+#     ultralytics enables HSV jitter by default (0.015/0.7/0.4) — this is
+#     the one override that MUST happen, not a tuning choice.
+# flip (fliplr=0.5 default) and mosaic/mixup/scale/translate stay at
+# ultralytics defaults, same spirit as keeping DEIMv2/D-FINE's paper-default
+# Mosaic/MixUp/CopyBlend policy untouched — only the color axis is removed.
+#
+# Run from repo root:
+#   python src/training/train_yolo11.py --cfg configs/model/yolo11/yolo11s_pidray.yaml
+model: yolo11s.pt
+data: configs/model/yolo11/pidray_data.yaml
+project: outputs
+name: yolo11s_pidray
+
+hsv_h: 0.0
+hsv_s: 0.0
+hsv_v: 0.0
