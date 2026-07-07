@@ -75,17 +75,13 @@ framed as AI research (not just engineering comparison).
 ### Phase 2 — Baselines (weeks 2-4)
 - [ ] Train all 3 models with paper-default hyperparameters (no tuning)
   - **DEIMv2** (HGNetV2-S, `configs/model/deimv2/deimv2_pidray.yml`) — config wired,
-    smoke test passed (1 epoch, tiny batch, loss finite, no crash). Still open
-    before a real run:
-    - [ ] Implement gradient accumulation so effective batch = 32 (paper default
-      assumes 8 GPUs; server has 1×RTX 3090/24GB) — check if
-      `third_party/DEIMv2/engine/solver/_solver.py` supports it natively first
+    smoke test passed. Gradient accumulation done: `src/training/train_deimv2.py`
+    (`accum_micro_batch: 4` in config), verified 781 iters/epoch (matches true
+    batch=32 math), max mem ~3.5GB (was OOM at 23GB+), loss finite. Still open:
     - [ ] Wire `src/data/augmentation.py`'s CLAHE (clip=2.0, grid=8x8) into a
       registered transform op — currently train/val ops use repo defaults
       (RandomZoomOut/IoUCrop/Flip minus RandomPhotometricDistort) with NO CLAHE
       yet. Must land in a git-tracked location (third_party/ is gitignored)
-    - [ ] Decide DEIMv2 model scale/backbone... DONE (HGNetV2-S, 2026-07-07,
-      matches D-FINE backbone family for RQ1 cleanliness)
   - **D-FINE** (HGNetV2-S, `configs/model/dfine/dfine_pidray.yml`, based on
     `dfine_hgnetv2_s_coco.yml` paper defaults, not the unvalidated `_custom.yml`
     preset) — config wired, smoke test passed **on the first try**, no bugs:
@@ -93,8 +89,9 @@ framed as AI research (not just engineering comparison).
     shared `materialize_split.py` output) all transferred directly since D-FINE
     is the repo DEIMv2 forked from. Note: D-FINE's epoch override key is
     `epochs`, not `epoches` (DEIMv2's spelling) — different repos, different
-    typos. Still open: same gradient-accumulation and CLAHE-wiring items as
-    DEIMv2 above (batch_size=32 default also assumes 8 GPUs here)
+    typos. Gradient accumulation done too: `src/training/train_dfine.py`, same
+    verification (781 iters/epoch, ~3.6GB max mem, loss finite). Still open:
+    same CLAHE-wiring item as DEIMv2 above
   - **YOLO11** — not started. Needs COCO→YOLO label converter first (this is
     the still-open part of checklist item 1.6) before any config/training work
   - **Cross-cutting TODO before Phase 5**: materialize a 0-indexed COPY of the
