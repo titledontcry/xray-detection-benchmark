@@ -1,0 +1,17 @@
+# D-FINE Phase 2 baseline config — HGNetV2-S backbone, matching DEIMv2's
+# choice for RQ1 comparability (D-FINE only offers HGNetV2 anyway).
+#
+# Based on dfine_hgnetv2_s_coco.yml (the paper's actual reported
+# hyperparameters), NOT dfine_hgnetv2_s_custom.yml (an unvalidated
+# "finetune on your own data" preset with different epochs/batch/lr) —
+# see PLAN.md Decision Log, 2026-07-07. Only the dataset section is
+# overridden, per Phase 2's "no tuning yet" rule.
+#
+# Run from repo root:
+#   torchrun --nproc_per_node=1 third_party/D-FINE/train.py -c configs/model/dfine/dfine_pidray.yml
+__include__: [
+  '../../../third_party/D-FINE/configs/dfine/dfine_hgnetv2_s_coco.yml',
+  './pidray_dataset.yml',
+]
+
+output_dir: ./outputs/dfine_hgnetv2_s_pidray

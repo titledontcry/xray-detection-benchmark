@@ -1,0 +1,64 @@
+task: detection
+
+evaluator:
+  type: CocoEvaluator
+  iou_types: ['bbox', ]
+
+num_classes: 12
+remap_mscoco_category: False
+
+# Train and val both come from the official PIDray *train* image folder —
+# our val split (data/splits/val_ids.json) is a subset of official train,
+# NOT a separate folder like easy/hard/hidden. Only ann_file differs;
+# both point at the materialized per-split JSON from
+# src/data/materialize_split.py (already 0-indexed category ids — same
+# gotcha as DEIMv2: CocoDetection uses raw category_id as label whenever
+# remap_mscoco_category=False, see third_party/D-FINE/src/data/dataset/coco_dataset.py).
+train_dataloader:
+  type: DataLoader
+  dataset:
+    type: CocoDetection
+    img_folder: data/raw/pidray/train
+    ann_file: data/processed/pidray_train.json
+    return_masks: False
+    transforms:
+      type: Compose
+      # Same as third_party/D-FINE/configs/dfine/include/dataloader.yml's
+      # defaults, MINUS RandomPhotometricDistort (color jitter — forbidden
+      # for X-ray, CLAUDE.md hard rule #3).
+      # TODO: register a CLAHE op (see configs/model/deimv2/pidray_dataset.yml
+      # TODO for the same open item — not yet wired for either model).
+      ops:
+        - {type: RandomZoomOut, fill: 0}
+        - {type: RandomIoUCrop, p: 0.8}
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        - {type: RandomHorizontalFlip}
+        - {type: Resize, size: [640, 640]}
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+        - {type: ConvertBoxes, fmt: 'cxcywh', normalize: True}
+  shuffle: True
+  num_workers: 4
+  drop_last: True
+  collate_fn:
+    type: BatchImageCollateFunction
+
+val_dataloader:
+  type: DataLoader
+  dataset:
+    type: CocoDetection
+    img_folder: data/raw/pidray/train
+    ann_file: data/processed/pidray_val.json
+    return_masks: False
+    transforms:
+      type: Compose
+      # Val must never see flip/crop/color aug — resize + tensor conversion
+      # only, matching include/dataloader.yml's val defaults.
+      ops:
+        - {type: Resize, size: [640, 640]}
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+  shuffle: False
+  num_workers: 4
+  drop_last: False
+  collate_fn:
+    type: BatchImageCollateFunction

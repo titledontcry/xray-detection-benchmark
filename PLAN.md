@@ -74,6 +74,32 @@ framed as AI research (not just engineering comparison).
 
 ### Phase 2 — Baselines (weeks 2-4)
 - [ ] Train all 3 models with paper-default hyperparameters (no tuning)
+  - **DEIMv2** (HGNetV2-S, `configs/model/deimv2/deimv2_pidray.yml`) — config wired,
+    smoke test passed (1 epoch, tiny batch, loss finite, no crash). Still open
+    before a real run:
+    - [ ] Implement gradient accumulation so effective batch = 32 (paper default
+      assumes 8 GPUs; server has 1×RTX 3090/24GB) — check if
+      `third_party/DEIMv2/engine/solver/_solver.py` supports it natively first
+    - [ ] Wire `src/data/augmentation.py`'s CLAHE (clip=2.0, grid=8x8) into a
+      registered transform op — currently train/val ops use repo defaults
+      (RandomZoomOut/IoUCrop/Flip minus RandomPhotometricDistort) with NO CLAHE
+      yet. Must land in a git-tracked location (third_party/ is gitignored)
+    - [ ] Decide DEIMv2 model scale/backbone... DONE (HGNetV2-S, 2026-07-07,
+      matches D-FINE backbone family for RQ1 cleanliness)
+  - **D-FINE** — not started. Same repo family as DEIMv2 (DEIMv2 forked from it),
+    so expect the same gotchas going in: `ops: ~` silently drops real defaults
+    (must list ops explicitly), needs `torchrun --nproc_per_node=1` (plain
+    `python train.py` crashes on `dist.get_rank()`), category ids already
+    0-indexed correctly since it'll reuse `data/processed/pidray_{train,val}.json`
+    from `materialize_split.py` (no new remap needed), batch_size assumptions
+    likely also sized for multi-GPU. Still need: pick model scale (ask user,
+    default to matching DEIMv2's choice for comparability), dataset yaml,
+    CLAHE wiring (same open item as DEIMv2 above)
+  - **YOLO11** — not started. Needs COCO→YOLO label converter first (this is
+    the still-open part of checklist item 1.6) before any config/training work
+  - **Cross-cutting TODO before Phase 5**: materialize a 0-indexed COPY of the
+    official test JSONs (easy/hard/hidden) using the same remap as
+    `materialize_split.py` — never edit `data/raw/pidray/annotations/xray_test_*.json`
 - [ ] Verify losses converge; record time/epoch → informs HPO budget
 - [ ] Log baseline mAP as sanity floor
 
