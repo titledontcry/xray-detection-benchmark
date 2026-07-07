@@ -66,7 +66,7 @@ framed as AI research (not just engineering comparison).
 - [x] 1.2 EDA notebook: annotation format? image sizes? class distribution? official split structure?
       → decide: is SAHI tiling needed (RQ2)? pre-compute vs on-the-fly CLAHE?
 - [x] 1.3 CONFIRMED: PIDray ships in COCO format (mmdet CocoDataset; xray_train.json + xray_test_{easy,hard,hidden}.json) → no converter needed, only run `src/data/validate_coco.py`
-- [ ] 1.4 Split official train → train/val (85/15, multi-label stratified, seed=42)
+- [x] 1.4 Split official train → train/val (85/15, multi-label stratified, seed=42)
       → commit `data/splits/*.json` (image-id lists only — small files, git OK)
 - [ ] 1.5 Preprocessing + shared augmentation config
 - [ ] 1.6 **Sanity check (mandatory)**: visualize 100 random images with bboxes; verify COCO→YOLO
