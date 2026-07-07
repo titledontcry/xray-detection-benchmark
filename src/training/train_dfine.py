@@ -23,16 +23,31 @@ Usage (run from repo root):
         -u accum_micro_batch=4
 """
 import argparse
+import importlib.util
 import math
 import sys
 from pathlib import Path
 
-DFINE_ROOT = Path(__file__).resolve().parents[2] / "third_party" / "D-FINE"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DFINE_ROOT = REPO_ROOT / "third_party" / "D-FINE"
 sys.path.insert(0, str(DFINE_ROOT))
 
 import torch  # noqa: E402
+import torchvision.transforms.v2 as T  # noqa: E402
+import PIL.Image  # noqa: E402
 
-from src.core import YAMLConfig, yaml_utils  # noqa: E402
+from src.core import YAMLConfig, yaml_utils, register  # noqa: E402
+
+# Loaded by file path, NOT `from src.data... import ...` — see the naming
+# collision warning above. D-FINE's own `src` package is already on
+# sys.path by the time this runs; a bare import would resolve to it.
+_spec = importlib.util.spec_from_file_location(
+    "xray_clahe_transform", REPO_ROOT / "src" / "data" / "clahe_transform.py")
+_clahe_module = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_clahe_module)
+make_clahe_transform_class = _clahe_module.make_clahe_transform_class
+
+make_clahe_transform_class(register, T.Transform, (PIL.Image.Image,))
 from src.misc import MetricLogger, SmoothedValue, dist_utils, save_samples  # noqa: E402
 from src.solver import TASKS  # noqa: E402
 import src.solver.det_solver as det_solver_module  # noqa: E402

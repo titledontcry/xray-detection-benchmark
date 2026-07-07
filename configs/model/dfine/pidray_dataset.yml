@@ -26,9 +26,12 @@ train_dataloader:
       # Same as third_party/D-FINE/configs/dfine/include/dataloader.yml's
       # defaults, MINUS RandomPhotometricDistort (color jitter — forbidden
       # for X-ray, CLAUDE.md hard rule #3).
-      # TODO: register a CLAHE op (see configs/model/deimv2/pidray_dataset.yml
-      # TODO for the same open item — not yet wired for either model).
+      # CLAHE registered by src/training/train_dfine.py (must run via that
+      # entrypoint, not third_party's train.py directly, or `type: CLAHE`
+      # won't resolve). Runs first, before any geometric op, on the raw PIL
+      # image — matches configs/data/pidray.yaml (clip=2.0, grid=8x8).
       ops:
+        - {type: CLAHE, clip_limit: 2.0, tile_grid_size: 8}
         - {type: RandomZoomOut, fill: 0}
         - {type: RandomIoUCrop, p: 0.8}
         - {type: SanitizeBoundingBoxes, min_size: 1}
@@ -52,9 +55,10 @@ val_dataloader:
     return_masks: False
     transforms:
       type: Compose
-      # Val must never see flip/crop/color aug — resize + tensor conversion
-      # only, matching include/dataloader.yml's val defaults.
+      # Val must never see flip/crop/color aug — CLAHE (preprocessing, not
+      # augmentation) + resize + tensor conversion only.
       ops:
+        - {type: CLAHE, clip_limit: 2.0, tile_grid_size: 8}
         - {type: Resize, size: [640, 640]}
         - {type: ConvertPILImage, dtype: 'float32', scale: True}
   shuffle: False
