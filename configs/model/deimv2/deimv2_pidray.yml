@@ -6,11 +6,19 @@
 # (epochs, optimizer, LR schedule, model architecture) — only the dataset
 # section is overridden, per Phase 2's "no tuning yet" rule.
 #
-# Run from repo root:
-#   python third_party/DEIMv2/train.py -c configs/model/deimv2/deimv2_pidray.yml
+# Run from repo root (use src/training/train_deimv2.py, NOT third_party's
+# train.py directly, so gradient accumulation actually takes effect):
+#   torchrun --nproc_per_node=1 src/training/train_deimv2.py -c configs/model/deimv2/deimv2_pidray.yml
 __include__: [
   '../../../third_party/DEIMv2/configs/deimv2/deimv2_hgnetv2_s_coco.yml',
   './pidray_dataset.yml',
 ]
 
 output_dir: ./outputs/deimv2_hgnetv2_s_pidray
+
+# Server has 1x RTX 3090 (24GB); a true batch of 32 at this config's
+# multi-scale training resolutions (up to 800x800) OOMs. This caps the
+# per-forward-pass chunk size — src/training/train_deimv2.py accumulates
+# gradients across chunks so the effective batch size stays 32, matching
+# the paper (see PLAN.md Decision Log, 2026-07-07).
+accum_micro_batch: 4
