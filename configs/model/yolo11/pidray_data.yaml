@@ -1,0 +1,27 @@
+# ultralytics dataset config — generated labels come from
+# src/data/convert_coco_to_yolo.py, run from repo root:
+#   python src/data/convert_coco_to_yolo.py \
+#       --processed-dir data/processed --raw-image-dir data/raw/pidray/train \
+#       --out-dir data/processed/yolo
+#
+# `path` is relative to repo root (ultralytics commands must be run from
+# there — project convention, CLAUDE.md). images/{train,val} are symlinks
+# into data/raw/pidray/train, not copies — see the converter script's
+# docstring for why.
+path: data/processed/yolo
+train: images/train
+val: images/val
+
+names:
+  0: gun
+  1: knife
+  2: wrench
+  3: pliers
+  4: scissors
+  5: hammer
+  6: handcuffs
+  7: baton
+  8: sprayer
+  9: powerbank
+  10: lighter
+  11: bullet
