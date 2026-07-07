@@ -44,6 +44,11 @@ from src.core import YAMLConfig, yaml_utils, register  # noqa: E402
 _spec = importlib.util.spec_from_file_location(
     "xray_clahe_transform", REPO_ROOT / "src" / "data" / "clahe_transform.py")
 _clahe_module = importlib.util.module_from_spec(_spec)
+# Must be registered in sys.modules BEFORE exec_module: D-FINE's register()
+# decorator calls importlib.import_module(cls.__module__) on our CLAHE
+# class to resolve it later, which fails if this module isn't importable
+# by name (module_from_spec alone doesn't add it to sys.modules).
+sys.modules["xray_clahe_transform"] = _clahe_module
 _spec.loader.exec_module(_clahe_module)
 make_clahe_transform_class = _clahe_module.make_clahe_transform_class
 
