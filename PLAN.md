@@ -86,15 +86,15 @@ framed as AI research (not just engineering comparison).
       yet. Must land in a git-tracked location (third_party/ is gitignored)
     - [ ] Decide DEIMv2 model scale/backbone... DONE (HGNetV2-S, 2026-07-07,
       matches D-FINE backbone family for RQ1 cleanliness)
-  - **D-FINE** — not started. Same repo family as DEIMv2 (DEIMv2 forked from it),
-    so expect the same gotchas going in: `ops: ~` silently drops real defaults
-    (must list ops explicitly), needs `torchrun --nproc_per_node=1` (plain
-    `python train.py` crashes on `dist.get_rank()`), category ids already
-    0-indexed correctly since it'll reuse `data/processed/pidray_{train,val}.json`
-    from `materialize_split.py` (no new remap needed), batch_size assumptions
-    likely also sized for multi-GPU. Still need: pick model scale (ask user,
-    default to matching DEIMv2's choice for comparability), dataset yaml,
-    CLAHE wiring (same open item as DEIMv2 above)
+  - **D-FINE** (HGNetV2-S, `configs/model/dfine/dfine_pidray.yml`, based on
+    `dfine_hgnetv2_s_coco.yml` paper defaults, not the unvalidated `_custom.yml`
+    preset) — config wired, smoke test passed **on the first try**, no bugs:
+    the DEIMv2 fixes (explicit ops list, `torchrun`, 0-indexed category ids via
+    shared `materialize_split.py` output) all transferred directly since D-FINE
+    is the repo DEIMv2 forked from. Note: D-FINE's epoch override key is
+    `epochs`, not `epoches` (DEIMv2's spelling) — different repos, different
+    typos. Still open: same gradient-accumulation and CLAHE-wiring items as
+    DEIMv2 above (batch_size=32 default also assumes 8 GPUs here)
   - **YOLO11** — not started. Needs COCO→YOLO label converter first (this is
     the still-open part of checklist item 1.6) before any config/training work
   - **Cross-cutting TODO before Phase 5**: materialize a 0-indexed COPY of the
