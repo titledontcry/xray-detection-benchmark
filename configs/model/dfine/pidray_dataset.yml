@@ -41,7 +41,7 @@ train_dataloader:
         - {type: ConvertPILImage, dtype: 'float32', scale: True}
         - {type: ConvertBoxes, fmt: 'cxcywh', normalize: True}
   shuffle: True
-  num_workers: 4
+  num_workers: 16
   drop_last: True
   collate_fn:
     type: BatchImageCollateFunction
@@ -62,7 +62,7 @@ val_dataloader:
         - {type: Resize, size: [640, 640]}
         - {type: ConvertPILImage, dtype: 'float32', scale: True}
   shuffle: False
-  num_workers: 4
+  num_workers: 8
   drop_last: False
   collate_fn:
     type: BatchImageCollateFunction

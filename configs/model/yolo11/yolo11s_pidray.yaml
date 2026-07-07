@@ -21,3 +21,8 @@ name: yolo11s_pidray
 hsv_h: 0.0
 hsv_s: 0.0
 hsv_v: 0.0
+
+# Server has 32 CPU cores; ultralytics' default workers=8 was leaving most
+# of them idle. Purely an infra/throughput setting, not a training
+# hyperparameter — doesn't affect what gets trained, safe to raise freely.
+workers: 16
