@@ -17,7 +17,15 @@ categories:
 paths:
   raw_dir: data/raw/pidray
   processed_images: data/processed/images
-  coco_json: data/processed/pidray_coco.json
+  # materialized per-split COCO JSON (src/data/materialize_split.py) — every
+  # model's dataloader points ann_file at these two, never at xray_train.json
+  # directly, so all 3 models train/val on the identical id sets.
+  train_json: data/processed/pidray_train.json
+  val_json: data/processed/pidray_val.json
+  # official test — untouched, read straight from raw_dir, never materialized
+  test_easy_json: data/raw/pidray/annotations/xray_test_easy.json
+  test_hard_json: data/raw/pidray/annotations/xray_test_hard.json
+  test_hidden_json: data/raw/pidray/annotations/xray_test_hidden.json
   split_dir: data/splits
 
 split:
