@@ -91,8 +91,18 @@ framed as AI research (not just engineering comparison).
     torchvision 0.27.1 (unpinned requirements.txt) vs DEIMv2's 0.20.1 —
     newer torchvision renamed the Transform hook `_transform`→`transform`,
     needed the same shim D-FINE's own `ConvertPILImage` already uses.
-  - **YOLO11** — not started. Needs COCO→YOLO label converter first (this is
-    the still-open part of checklist item 1.6) before any config/training work
+  - **YOLO11-S** (`configs/model/yolo11/{pidray_data,yolo11s_pidray}.yaml`,
+    `src/training/train_yolo11.py`) — DONE: COCO→YOLO converter
+    (`src/data/convert_coco_to_yolo.py`, symlinked images + generated labels,
+    verified 8/8 sampled boxes correct — this also completed checklist 1.6),
+    config wired, smoke test passed on the first try. No published paper
+    defaults exist for YOLO11 (unlike DEIMv2/D-FINE) — ultralytics' own
+    untouched defaults stand in for that role; only `hsv_h/s/v=0` overridden
+    per hard rule #3. No third_party clone or gradient accumulation needed
+    (pip package, far smaller memory footprint than the DETR decoders).
+    CLAHE not yet wired for this model — ultralytics has its own optional
+    Albumentations integration (different mechanism than DEIMv2/D-FINE's
+    registry) that would need investigating separately if we want it applied.
   - **Cross-cutting TODO before Phase 5**: materialize a 0-indexed COPY of the
     official test JSONs (easy/hard/hidden) using the same remap as
     `materialize_split.py` — never edit `data/raw/pidray/annotations/xray_test_*.json`
