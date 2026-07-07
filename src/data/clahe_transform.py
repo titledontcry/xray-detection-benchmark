@@ -49,6 +49,16 @@ def make_clahe_transform_class(register, transform_base_cls, transformed_types):
                 p=1.0,
             )
 
+        def transform(self, inpt, params):
+            # Newer torchvision (>=0.24-ish, e.g. D-FINE's env pulled 0.27.1
+            # via its unpinned requirements.txt) renamed the abstract hook
+            # from `_transform` to `transform`. DEIMv2's env has an older
+            # torchvision (0.20.1) where only `_transform` exists and is
+            # called directly, never `transform`. Defining both — `transform`
+            # delegating to `_transform` — matches the shim D-FINE's own
+            # ConvertPILImage/ConvertBoxes use, and works on both versions.
+            return self._transform(inpt, params)
+
         def _transform(self, inpt, params):
             arr = np.array(inpt.convert("RGB"))
             out = self._clahe(image=arr)["image"]
