@@ -10,6 +10,9 @@ data/sixray/
 !assets/**/*.png
 !assets/**/*.jpg
 
+# === Third-party model repos (cloned fresh per machine by scripts/setup_env.sh) ===
+third_party/
+
 # === Checkpoints / logs / experiment outputs ===
 experiments/
 checkpoints/
