@@ -74,24 +74,23 @@ framed as AI research (not just engineering comparison).
 
 ### Phase 2 — Baselines (weeks 2-4)
 - [ ] Train all 3 models with paper-default hyperparameters (no tuning)
-  - **DEIMv2** (HGNetV2-S, `configs/model/deimv2/deimv2_pidray.yml`) — config wired,
-    smoke test passed. Gradient accumulation done: `src/training/train_deimv2.py`
-    (`accum_micro_batch: 4` in config), verified 781 iters/epoch (matches true
-    batch=32 math), max mem ~3.5GB (was OOM at 23GB+), loss finite. Still open:
-    - [ ] Wire `src/data/augmentation.py`'s CLAHE (clip=2.0, grid=8x8) into a
-      registered transform op — currently train/val ops use repo defaults
-      (RandomZoomOut/IoUCrop/Flip minus RandomPhotometricDistort) with NO CLAHE
-      yet. Must land in a git-tracked location (third_party/ is gitignored)
+  - **DEIMv2** (HGNetV2-S, `configs/model/deimv2/deimv2_pidray.yml`) — DONE:
+    config wired, gradient accumulation (`src/training/train_deimv2.py`,
+    `accum_micro_batch: 4`, verified 781 iters/epoch matching true batch=32
+    math, max mem ~3.5GB vs OOM at 23GB+), and CLAHE wired
+    (`src/data/clahe_transform.py`, backed by the same `albumentations.CLAHE`
+    as `src/data/augmentation.py` — color-safe LAB-only enhancement, confirmed
+    PIDray images are genuinely colorized dual-energy, not grayscale-as-RGB).
+    All verified with smoke tests, loss finite throughout.
   - **D-FINE** (HGNetV2-S, `configs/model/dfine/dfine_pidray.yml`, based on
     `dfine_hgnetv2_s_coco.yml` paper defaults, not the unvalidated `_custom.yml`
-    preset) — config wired, smoke test passed **on the first try**, no bugs:
-    the DEIMv2 fixes (explicit ops list, `torchrun`, 0-indexed category ids via
-    shared `materialize_split.py` output) all transferred directly since D-FINE
-    is the repo DEIMv2 forked from. Note: D-FINE's epoch override key is
-    `epochs`, not `epoches` (DEIMv2's spelling) — different repos, different
-    typos. Gradient accumulation done too: `src/training/train_dfine.py`, same
-    verification (781 iters/epoch, ~3.6GB max mem, loss finite). Still open:
-    same CLAHE-wiring item as DEIMv2 above
+    preset) — DONE, same as DEIMv2: gradient accumulation
+    (`src/training/train_dfine.py`) + CLAHE wired, both verified. Two
+    version-specific gotchas hit along the way: epoch override key is
+    `epochs` not `epoches` (DEIMv2's spelling), and D-FINE's env resolved
+    torchvision 0.27.1 (unpinned requirements.txt) vs DEIMv2's 0.20.1 —
+    newer torchvision renamed the Transform hook `_transform`→`transform`,
+    needed the same shim D-FINE's own `ConvertPILImage` already uses.
   - **YOLO11** — not started. Needs COCO→YOLO label converter first (this is
     the still-open part of checklist item 1.6) before any config/training work
   - **Cross-cutting TODO before Phase 5**: materialize a 0-indexed COPY of the
