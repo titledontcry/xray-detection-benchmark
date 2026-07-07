@@ -69,7 +69,7 @@ framed as AI research (not just engineering comparison).
 - [x] 1.4 Split official train → train/val (85/15, multi-label stratified, seed=42)
       → commit `data/splits/*.json` (image-id lists only — small files, git OK)
 - [x] 1.5 Preprocessing + shared augmentation config
-- [ ] 1.6 **Sanity check (mandatory)**: visualize 100 random images with bboxes; verify COCO→YOLO
+- [x] 1.6 **Sanity check (mandatory)**: visualize 100 random images with bboxes; verify COCO→YOLO
       conversion preserves boxes; count instances per class per split
 
 ### Phase 2 — Baselines (weeks 2-4)
