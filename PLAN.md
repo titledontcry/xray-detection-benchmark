@@ -116,6 +116,12 @@ framed as AI research (not just engineering comparison).
     Original raw files under `data/raw/pidray/annotations/` untouched.
 - [ ] Verify losses converge; record time/epoch → informs HPO budget
 - [ ] Log baseline mAP as sanity floor
+- [ ] **Compare all 3 models' val-set results side by side in one table**
+      (AP@0.5:0.95, AP@0.5, AP-S, per-model params/FLOPs) — once after the
+      25-epoch reduced pass (for the advisor check-in), then again after the
+      full paper-default (132/132/100) run. Neither table is the Phase 5
+      official comparison (that's on official test, post-HPO, 3 seeds) — this
+      is a baseline sanity comparison only.
 
 ### Phase 3 — HPO (Optuna)
 - [ ] Optuna study per model, ASHA pruning, val-set objective, SQLite storage for resume
