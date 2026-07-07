@@ -21,10 +21,22 @@ train_dataloader:
     return_masks: False
     transforms:
       type: Compose
-      # TODO: wire src/data/augmentation.py (CLAHE + flip + bbox-safe crop,
-      # no color/HSV jitter) once DEIMv2's transform registry format is
-      # confirmed — leaving ~ (repo defaults) for the initial smoke test.
-      ops: ~
+      # Same as third_party/DEIMv2/configs/base/dataloader.yml's defaults,
+      # MINUS RandomPhotometricDistort (color jitter — forbidden for X-ray,
+      # CLAUDE.md hard rule #3). Crop/flip stay since those are allowed.
+      # TODO: register a CLAHE op in this repo's transform registry
+      # (third_party/DEIMv2/engine/data/transforms.py) so preprocessing
+      # matches configs/data/pidray.yaml (clip=2.0, grid=8x8) — not yet
+      # wired, tracked as a Phase 2 follow-up.
+      ops:
+        - {type: RandomZoomOut, fill: 0}
+        - {type: RandomIoUCrop, p: 0.8}
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        - {type: RandomHorizontalFlip}
+        - {type: Resize, size: [640, 640]}
+        - {type: SanitizeBoundingBoxes, min_size: 1}
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+        - {type: ConvertBoxes, fmt: 'cxcywh', normalize: True}
   shuffle: True
   num_workers: 4
   drop_last: True
@@ -40,8 +52,12 @@ val_dataloader:
     return_masks: False
     transforms:
       type: Compose
-      # TODO: same as above — CLAHE only, no flip/crop, once wired.
-      ops: ~
+      # Val must never see flip/crop/color aug — resize + tensor conversion
+      # only, matching base/dataloader.yml's val defaults.
+      # TODO: same CLAHE op as train once registered (see above).
+      ops:
+        - {type: Resize, size: [640, 640]}
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
   shuffle: False
   num_workers: 4
   drop_last: False
