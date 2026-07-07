@@ -21,9 +21,10 @@ paths:
   split_dir: data/splits
 
 split:
-  train: 0.70
+  # Official PIDray test (easy/hard/hidden) is untouchable — never re-split.
+  # Only the official train set is split here.
+  train: 0.85
   val: 0.15
-  test: 0.15
   seed: 42
   strategy: multilabel_stratified   # image-level, not vehicle-level
 
