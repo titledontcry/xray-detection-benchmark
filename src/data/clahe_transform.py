@@ -19,6 +19,8 @@ own separate `register()`/GLOBAL_CONFIG — the same class object can't be
 registered into two independent registries, so each wrapper entrypoint
 calls this once with its own repo's `register` decorator.
 """
+import sys
+
 import albumentations as A
 import numpy as np
 from PIL import Image as PILImage
@@ -51,5 +53,12 @@ def make_clahe_transform_class(register, transform_base_cls, transformed_types):
             arr = np.array(inpt.convert("RGB"))
             out = self._clahe(image=arr)["image"]
             return PILImage.fromarray(out)
+
+    # register()'s introspection later resolves the class via
+    # getattr(importlib.import_module(cls.__module__), cls.__name__) — that
+    # requires CLAHE to be a genuine top-level attribute of this module, but
+    # a class defined inside this factory function is only a local variable.
+    # Export it explicitly so the lookup succeeds.
+    setattr(sys.modules[CLAHE.__module__], CLAHE.__name__, CLAHE)
 
     return CLAHE
