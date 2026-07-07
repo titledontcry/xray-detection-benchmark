@@ -103,9 +103,11 @@ framed as AI research (not just engineering comparison).
     CLAHE not yet wired for this model — ultralytics has its own optional
     Albumentations integration (different mechanism than DEIMv2/D-FINE's
     registry) that would need investigating separately if we want it applied.
-  - **Cross-cutting TODO before Phase 5**: materialize a 0-indexed COPY of the
-    official test JSONs (easy/hard/hidden) using the same remap as
-    `materialize_split.py` — never edit `data/raw/pidray/annotations/xray_test_*.json`
+  - **Phase 5 prep DONE**: `src/data/remap_test_categories.py` materializes a
+    0-indexed copy of the official test JSONs (easy/hard/hidden) at
+    `data/processed/pidray_test_{easy,hard,hidden}.json` — verified counts
+    match `validate_coco.py` exactly (9482/9482, 3733/8892, 5005/5008).
+    Original raw files under `data/raw/pidray/annotations/` untouched.
 - [ ] Verify losses converge; record time/epoch → informs HPO budget
 - [ ] Log baseline mAP as sanity floor
 
