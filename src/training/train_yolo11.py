@@ -14,6 +14,7 @@ Usage (run from repo root):
 import argparse
 from pathlib import Path
 
+import albumentations as A
 import yaml
 from ultralytics import YOLO
 
@@ -32,6 +33,16 @@ def main():
         key, _, value = item.lstrip("-").partition("=")
         overrides[key] = yaml.safe_load(value)
     cfg.update(overrides)
+
+    # ultralytics.data.augment.Albumentations reads hyp.augmentations and
+    # uses it as its transform list verbatim when given (falls back to its
+    # own low-probability Blur/ToGray/CLAHE/... combo otherwise) — a
+    # built-in extension point, no monkey-patching needed. Can't express a
+    # Python object list in the YAML config, so it's injected here instead
+    # of configs/model/yolo11/yolo11s_pidray.yaml. Same clip/grid as
+    # src/data/augmentation.py and src/data/clahe_transform.py — one CLAHE
+    # definition, three models.
+    cfg["augmentations"] = [A.CLAHE(clip_limit=2.0, tile_grid_size=(8, 8), p=1.0)]
 
     model_name = cfg.pop("model")
     model = YOLO(model_name)
