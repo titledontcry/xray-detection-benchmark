@@ -4,8 +4,8 @@
 > ทำขั้นตอนเสร็จ → ติ๊ก checkbox → commit
 > ตัดสินใจอะไรใหม่ → บันทึกใน Decision Log ท้ายไฟล์ พร้อมวันที่และเหตุผล
 
-**Last updated**: 2026-07-06
-**Current phase**: Phase 0-1 (setup + data preparation)
+**Last updated**: 2026-07-07
+**Current phase**: Phase 2 (baselines) — running a reduced-epoch pass first for an advisor check-in, full paper-default run to follow
 
 ---
 
@@ -73,6 +73,12 @@ framed as AI research (not just engineering comparison).
       conversion preserves boxes; count instances per class per split
 
 ### Phase 2 — Baselines (weeks 2-4)
+- [ ] **In progress (2026-07-07)**: reduced-epoch pass (25 epochs, all 3 models,
+      down from paper-default 132/132/100) running sequentially in tmux on the
+      server — goal is a quick convergence/sanity check + numbers to show the
+      advisor, NOT the official Phase 2 baseline record. Re-run at full
+      paper-default epoch count afterward before treating any mAP number here
+      as final.
 - [ ] Train all 3 models with paper-default hyperparameters (no tuning)
   - **DEIMv2** (HGNetV2-S, `configs/model/deimv2/deimv2_pidray.yml`) — DONE:
     config wired, gradient accumulation (`src/training/train_deimv2.py`,
@@ -149,3 +155,4 @@ framed as AI research (not just engineering comparison).
 | 2026-07-07 | `materialize_split.py` remaps PIDray category_id (1-12) to 0-indexed labels (0-11) | DEIMv2 smoke test crashed with a CUDA "index out of bounds" assert — `CocoDetection` uses raw `category_id` as class label whenever `remap_mscoco_category=False`, so label 12 (bullet) indexed out of a 12-class head. **TODO before Phase 5**: apply the identical id-1 remap to a *separate* copy of the official test JSONs before feeding any model — never edit `data/raw/pidray/annotations/xray_test_*.json` directly. |
 | 2026-07-07 | Gradient accumulation via custom entrypoints `src/training/train_{deimv2,dfine}.py`, not third_party edits | Paper `total_batch_size=32` assumes 8 GPUs; server has 1x RTX 3090/24GB (true batch=32 OOMs at multi-scale training res). Dataloader still yields real batches of 32 (LR schedule iteration math, Mosaic/MixUp/CopyBlend batch-level augmentation untouched) — the wrapper only chunks the GPU forward/backward into `accum_micro_batch`-sized pieces via a monkey-patched `train_one_epoch`, since editing `third_party/*/engine|src` directly would vanish on re-clone (gitignored). Config field `accum_micro_batch: 4` in both `deimv2_pidray.yml`/`dfine_pidray.yml`. |
 | 2026-07-07 | **Bug fix**: `A.CLAHE(clip_limit=X)` treats a scalar as a `(1, X)` random range, not a fixed value | Discovered while wiring YOLO11's CLAHE — confirmed via `.get_params()` returning scattered values across `[1, 2]` instead of always `2.0`. CLAHE is a locked *preprocessing* decision (deterministic), not augmentation, so it must not vary per call. Fixed to `clip_limit=(2.0, 2.0)` in all three CLAHE call sites (`src/data/augmentation.py`, `src/data/clahe_transform.py` used by DEIMv2/D-FINE, `src/training/train_yolo11.py`). Re-verified all 3 models post-fix — no regressions, loss finite. |
+| 2026-07-07 | Run all 3 baselines at 25 epochs first (not paper-default 132/132/100) | Need results to show the advisor soon; full paper-default epoch count is ~5-6 GPU-days sequential on the single RTX 3090. This reduced pass is NOT the official Phase 2 baseline record — re-run at full epoch count is still required before any number here is treated as final. |
