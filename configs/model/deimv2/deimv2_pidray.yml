@@ -1,0 +1,16 @@
+# DEIMv2 Phase 2 baseline config — HGNetV2-S backbone (chosen 2026-07-07 to
+# match D-FINE's backbone family, isolating RQ1 to detection-head/architecture
+# differences rather than backbone differences — see PLAN.md Decision Log).
+#
+# Reuses ALL paper-default hyperparameters from the original scale config
+# (epochs, optimizer, LR schedule, model architecture) — only the dataset
+# section is overridden, per Phase 2's "no tuning yet" rule.
+#
+# Run from repo root:
+#   python third_party/DEIMv2/train.py -c configs/model/deimv2/deimv2_pidray.yml
+__include__: [
+  '../../../third_party/DEIMv2/configs/deimv2/deimv2_hgnetv2_s_coco.yml',
+  './pidray_dataset.yml',
+]
+
+output_dir: ./outputs/deimv2_hgnetv2_s_pidray

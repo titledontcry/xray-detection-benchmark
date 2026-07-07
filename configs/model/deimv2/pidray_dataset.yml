@@ -1,0 +1,49 @@
+task: detection
+
+evaluator:
+  type: CocoEvaluator
+  iou_types: ['bbox', ]
+
+num_classes: 12
+remap_mscoco_category: False
+
+# Train and val both come from the official PIDray *train* image folder —
+# our val split (data/splits/val_ids.json) is a subset of official train,
+# NOT a separate folder like easy/hard/hidden. Only ann_file differs;
+# both point at the materialized per-split JSON from
+# src/data/materialize_split.py, never at xray_train.json directly.
+train_dataloader:
+  type: DataLoader
+  dataset:
+    type: CocoDetection
+    img_folder: data/raw/pidray/train
+    ann_file: data/processed/pidray_train.json
+    return_masks: False
+    transforms:
+      type: Compose
+      # TODO: wire src/data/augmentation.py (CLAHE + flip + bbox-safe crop,
+      # no color/HSV jitter) once DEIMv2's transform registry format is
+      # confirmed — leaving ~ (repo defaults) for the initial smoke test.
+      ops: ~
+  shuffle: True
+  num_workers: 4
+  drop_last: True
+  collate_fn:
+    type: BatchImageCollateFunction
+
+val_dataloader:
+  type: DataLoader
+  dataset:
+    type: CocoDetection
+    img_folder: data/raw/pidray/train
+    ann_file: data/processed/pidray_val.json
+    return_masks: False
+    transforms:
+      type: Compose
+      # TODO: same as above — CLAHE only, no flip/crop, once wired.
+      ops: ~
+  shuffle: False
+  num_workers: 4
+  drop_last: False
+  collate_fn:
+    type: BatchImageCollateFunction
