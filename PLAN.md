@@ -131,6 +131,18 @@ framed as AI research (not just engineering comparison).
       post-HPO, 3 seeds) — this is a baseline sanity comparison only.
 
 ### Phase 3 — HPO (Optuna)
+- [ ] **Before starting**: enable `persistent_workers: True` + `pin_memory: True`
+      in DEIMv2/D-FINE's `train_dataloader`/`val_dataloader` config (currently
+      unset in `pidray_dataset.yml` for both). Diagnosed during the
+      full-epoch Phase 2 run: `time`/`data` split in training logs showed the
+      dataloader (not the GPU) as the bottleneck — CLAHE runs on-the-fly
+      per-image every epoch (intentional, see 2026-07-07 decision below) plus
+      worker respawn overhead every epoch (no `persistent_workers`) plus
+      slower CPU→GPU transfer (no `pin_memory`). The latter two are pure
+      infra settings that don't affect the CLAHE/HPO-flexibility tradeoff —
+      safe to fix without re-litigating that decision. Not fixed mid-run for
+      the current full-epoch pass to avoid disrupting a multi-day job
+      already in progress; do it before Optuna trials start instead.
 - [ ] Optuna study per model, ASHA pruning, val-set objective, SQLite storage for resume
 - [ ] Lock best config per model
 
