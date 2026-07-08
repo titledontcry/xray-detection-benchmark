@@ -28,7 +28,9 @@ Usage:
         --n-bootstrap 200
 """
 import argparse
+import contextlib
 import copy
+import io
 import json
 import random
 from pathlib import Path
@@ -79,17 +81,23 @@ def resample_coco(gt: dict, preds_a: list, preds_b: list, image_ids: list):
     return gt_resampled, new_preds_a, new_preds_b
 
 
-def coco_ap(gt_dict: dict, preds: list) -> float:
-    coco_gt = COCO()
-    coco_gt.dataset = gt_dict
-    coco_gt.createIndex()
-    if len(preds) == 0:
-        return 0.0
-    coco_dt = coco_gt.loadRes(preds)
-    ev = COCOeval(coco_gt, coco_dt, iouType="bbox")
-    ev.evaluate()
-    ev.accumulate()
-    ev.summarize()
+def coco_ap(gt_dict: dict, preds: list, quiet: bool = True) -> float:
+    # pycocotools prints "creating index... index created!" etc. on every
+    # call with no built-in quiet flag — silenced here since --n-bootstrap
+    # resamples call this hundreds of times and the per-iteration AP table
+    # isn't useful, only the final aggregate stats printed by main() are.
+    ctx = contextlib.redirect_stdout(io.StringIO()) if quiet else contextlib.nullcontext()
+    with ctx:
+        coco_gt = COCO()
+        coco_gt.dataset = gt_dict
+        coco_gt.createIndex()
+        if len(preds) == 0:
+            return 0.0
+        coco_dt = coco_gt.loadRes(preds)
+        ev = COCOeval(coco_gt, coco_dt, iouType="bbox")
+        ev.evaluate()
+        ev.accumulate()
+        ev.summarize()
     return ev.stats[0]  # AP@0.5:0.95
 
 
