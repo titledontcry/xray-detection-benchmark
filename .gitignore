@@ -25,6 +25,11 @@ outputs/
 *.onnx
 *.engine
 
+# === Eval artifacts (regenerable from checkpoints; predictions can be large) ===
+results/predictions/
+results/tide/
+results/*.png
+
 # === Python ===
 __pycache__/
 *.py[cod]

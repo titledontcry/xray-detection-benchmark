@@ -1,0 +1,20 @@
+{
+  "DEIMv2": {
+    "ap": 0.8516,
+    "flops_g": null,
+    "params_m": null,
+    "_note": "flops_g/params_m still TODO — DEIMv2 log.txt's n_parameters field is bogus (always 2), run third_party/DEIMv2/tools/benchmark/get_info.py -c configs/model/deimv2/deimv2_pidray.yml"
+  },
+  "D-FINE": {
+    "ap": 0.8184,
+    "flops_g": null,
+    "params_m": 10.185131,
+    "_note": "params_m from log.txt n_parameters field (verified real, matches D-FINE-S scale). flops_g still TODO — run third_party/D-FINE/tools/benchmark/get_info.py -c configs/model/dfine/dfine_pidray.yml"
+  },
+  "YOLO11-S": {
+    "ap": 0.862,
+    "flops_g": 21.3,
+    "params_m": 9.417444,
+    "_note": "from training log's final validation summary line: 'YOLO11s summary (fused): 101 layers, 9,417,444 parameters, 0 gradients, 21.3 GFLOPs'"
+  }
+}
