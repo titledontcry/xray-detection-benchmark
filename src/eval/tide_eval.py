@@ -36,18 +36,22 @@ from pathlib import Path
 from tidecv import TIDE, datasets
 
 
-def run_one(gt_path: Path, pred_path: Path, name: str, out_dir: Path) -> dict:
+def run_one(gt_path: Path, pred_path: Path, name: str, out_dir: Path) -> None:
+    # tide.summarize() prints the Main Errors dAP table (Cls/Loc/Both/Dupe/
+    # Bkg/Miss) directly — that IS the output we want, so this just runs it
+    # rather than trying to re-extract the same numbers from TIDERun's
+    # internal attributes (tried once, `error_dAPs` doesn't exist on the
+    # installed tidecv==1.0.1; the closest is `error_dict`, which is a
+    # differently-shaped per-class breakdown, not the flat summary table —
+    # not worth the fragility of depending on it).
     tide = TIDE()
     gt = datasets.COCO(str(gt_path))
     pred = datasets.COCOResult(str(pred_path))
     tide.evaluate_range(gt, pred, name=name, mode=TIDE.BOX)
+    print(f"\n-- {name} --")
     tide.summarize()
     out_dir.mkdir(parents=True, exist_ok=True)
     tide.plot(str(out_dir))
-    # tide.errors[name] holds the per-error-type dAP breakdown after evaluate
-    run = tide.runs[name]
-    return {err_type: run.error_dAPs.get(err_type, 0.0) for err_type in
-            ["Cls", "Loc", "Both", "Dupe", "Bkg", "Miss"]}
 
 
 def main():
@@ -60,22 +64,14 @@ def main():
     parser.add_argument("--out-dir", type=Path, required=True)
     args = parser.parse_args()
 
-    results = {}
     for entry in args.pred:
         if ":" in entry:
             path_str, name = entry.rsplit(":", 1)
         else:
             path_str, name = entry, args.name
-        results[name] = run_one(args.gt, Path(path_str), name, args.out_dir / name)
+        run_one(args.gt, Path(path_str), name, args.out_dir / name)
 
-    if len(results) > 1:
-        print("\n=== TIDE error-type comparison (dAP, lower = less of that error) ===")
-        header = ["Model", "Cls", "Loc", "Both", "Dupe", "Bkg", "Miss"]
-        print(f"{header[0]:<12}" + "".join(f"{h:>8}" for h in header[1:]))
-        for name, errs in results.items():
-            print(f"{name:<12}" + "".join(f"{errs[k]:>8.2f}" for k in header[1:]))
-
-    print(f"\nPer-model plots saved under {args.out_dir}/<model_name>/")
+    print(f"\nPer-model dAP tables printed above; plots saved under {args.out_dir}/<model_name>/")
 
 
 if __name__ == "__main__":
