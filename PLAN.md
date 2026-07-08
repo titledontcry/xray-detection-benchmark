@@ -138,6 +138,20 @@ framed as AI research (not just engineering comparison).
 - [ ] 3 seeds × best config × 3 models; save all checkpoints
 
 ### Phase 5 — Evaluation (weeks 8-10)
+- [x] **Tooling pre-built and dry-run tested (2026-07-08)**, ahead of schedule
+      while the full paper-default epoch training runs (~5-6 days idle GPU
+      time otherwise): `src/eval/export_yolo11_predictions.py`,
+      `export_deim_predictions.py` (shared by DEIMv2/D-FINE), `tide_eval.py`,
+      `calibration.py` (ECE), `bootstrap_significance.py`, `pareto_plot.py`.
+      All 5 scripts run end-to-end successfully against the 25-epoch
+      reduced-pass checkpoints on the **val set only** (never official
+      test — hard rule #1) — AP numbers from TIDE/bootstrap matched
+      training-log AP exactly, confirming the prediction-export step is
+      correct for all 3 models. `pareto_plot.py` still untested for real
+      (DEIMv2/D-FINE FLOPs not yet measured, only YOLO11's). This is
+      **tooling validation only, not a Phase 5 run** — the real Phase 5 run
+      still requires: HPO done, final 3-seed training done, official test
+      JSONs used instead of val.
 - [ ] Full metric suite on official test (per Easy/Hard/Hidden)
 - [ ] Cross-dataset eval (RQ3) on OPIXray/SIXray — request access EARLY (long lead time)
 - [ ] TIDE, ECE, FAR analysis, bootstrap significance, Pareto curves
@@ -170,3 +184,4 @@ framed as AI research (not just engineering comparison).
 | 2026-07-07 | **Bug fix**: `A.CLAHE(clip_limit=X)` treats a scalar as a `(1, X)` random range, not a fixed value | Discovered while wiring YOLO11's CLAHE — confirmed via `.get_params()` returning scattered values across `[1, 2]` instead of always `2.0`. CLAHE is a locked *preprocessing* decision (deterministic), not augmentation, so it must not vary per call. Fixed to `clip_limit=(2.0, 2.0)` in all three CLAHE call sites (`src/data/augmentation.py`, `src/data/clahe_transform.py` used by DEIMv2/D-FINE, `src/training/train_yolo11.py`). Re-verified all 3 models post-fix — no regressions, loss finite. |
 | 2026-07-07 | Run all 3 baselines at 25 epochs first (not paper-default 132/132/100) | Need results to show the advisor soon; full paper-default epoch count is ~5-6 GPU-days sequential on the single RTX 3090. This reduced pass is NOT the official Phase 2 baseline record — re-run at full epoch count is still required before any number here is treated as final. |
 | 2026-07-08 | 25-epoch reduced pass completed for all 3 models — val results: YOLO11-S 0.862/0.972, DEIMv2 0.852/0.954, D-FINE 0.818/0.936 (AP@0.5:0.95/AP@0.5) | All 3 still improving at epoch 24, no plateau. AP@0.5 is already near-saturated (lenient IoU=0.5 threshold + pretrained backbones + only 12 visually-distinct classes converge fast) while AP@0.5:0.95 (strict, averaged over IoU 0.5-0.95) has more headroom — expect full paper-default epoch run to raise AP@0.5:0.95 further without AP@0.5 moving much. Not yet conclusive for RQ1 (DETR vs CNN): YOLO11 currently leads but trained in ~1 GPU-hour vs several for DEIMv2/D-FINE, and none are at paper-default epoch count yet. |
+| 2026-07-08 | Built + dry-ran Phase 5 eval tooling early, during the full-epoch training's idle GPU-days | Rather than waste ~5-6 days of downtime, wrote and tested `src/eval/*` against the 25-epoch checkpoints (val set only — official test still untouched per hard rule #1). Found and fixed 2 bugs: (1) `tide_eval.py` called a nonexistent `TIDERun.error_dAPs` attribute (real tidecv==1.0.1 API has no such field — `tide.summarize()`'s own printed table is used instead of re-extracting internals); (2) `bootstrap_significance.py` didn't suppress pycocotools' unconditional per-call stdout, making 200-iteration runs unreadable — wrapped `coco_ap()` in `contextlib.redirect_stdout`. All 5 scripts (export ×2 variants, ECE, TIDE, bootstrap) verified end-to-end; `pareto_plot.py` still blocked on missing DEIMv2/D-FINE FLOPs numbers (`results/model_stats.json` has TODO placeholders — run each repo's `tools/benchmark/get_info.py`). |
