@@ -4,8 +4,8 @@
 > ทำขั้นตอนเสร็จ → ติ๊ก checkbox → commit
 > ตัดสินใจอะไรใหม่ → บันทึกใน Decision Log ท้ายไฟล์ พร้อมวันที่และเหตุผล
 
-**Last updated**: 2026-07-09
-**Current phase**: Phase 2 (baselines) — 25-epoch reduced pass DONE for all 3 models (advisor check-in numbers ready); full paper-default run (132/132/100) in progress, resumed after a server crash at DEIMv2 epoch 47 (see 2026-07-09 Decision Log entry) — DEIMv2 currently past epoch 48, D-FINE/YOLO11 queued to follow automatically
+**Last updated**: 2026-07-10
+**Current phase**: Phase 2 (baselines) — 25-epoch reduced pass DONE for all 3 models (advisor check-in numbers ready); full paper-default run (132/132/100): **DEIMv2 COMPLETE** (AP@0.5:0.95=0.8978), **D-FINE in progress** (auto-chained, ~epoch 46/132 as of last check), YOLO11 queued to follow automatically
 
 ---
 
@@ -95,6 +95,14 @@ framed as AI research (not just engineering comparison).
     as `src/data/augmentation.py` — color-safe LAB-only enhancement, confirmed
     PIDray images are genuinely colorized dual-energy, not grayscale-as-RGB).
     All verified with smoke tests, loss finite throughout.
+    **Full paper-default run (132/132 epochs) COMPLETED 2026-07-10**
+    (survived the 2026-07-09 server crash via resume at epoch 47, see
+    Decision Log). Final val-set result (epoch 131): AP@0.5:0.95 = **0.8978**,
+    AP@0.5 = 0.9768, AP@0.75 = 0.9506, AP-small = 0.9259, AR@100 = 0.9388 —
+    up from the 25-epoch reduced pass's 0.852/0.954. Notable: train loss
+    dropped sharply (~12.1→9.7) at epoch 120 exactly where `no_aug_epoch: 12`
+    disables heavy augmentation (132-12=120), as expected from the config's
+    augmentation-schedule design, not a bug.
   - **D-FINE** (HGNetV2-S, `configs/model/dfine/dfine_pidray.yml`, based on
     `dfine_hgnetv2_s_coco.yml` paper defaults, not the unvalidated `_custom.yml`
     preset) — DONE, same as DEIMv2: gradient accumulation
@@ -198,3 +206,4 @@ framed as AI research (not just engineering comparison).
 | 2026-07-08 | 25-epoch reduced pass completed for all 3 models — val results: YOLO11-S 0.862/0.972, DEIMv2 0.852/0.954, D-FINE 0.818/0.936 (AP@0.5:0.95/AP@0.5) | All 3 still improving at epoch 24, no plateau. AP@0.5 is already near-saturated (lenient IoU=0.5 threshold + pretrained backbones + only 12 visually-distinct classes converge fast) while AP@0.5:0.95 (strict, averaged over IoU 0.5-0.95) has more headroom — expect full paper-default epoch run to raise AP@0.5:0.95 further without AP@0.5 moving much. Not yet conclusive for RQ1 (DETR vs CNN): YOLO11 currently leads but trained in ~1 GPU-hour vs several for DEIMv2/D-FINE, and none are at paper-default epoch count yet. |
 | 2026-07-08 | Built + dry-ran Phase 5 eval tooling early, during the full-epoch training's idle GPU-days | Rather than waste ~5-6 days of downtime, wrote and tested `src/eval/*` against the 25-epoch checkpoints (val set only — official test still untouched per hard rule #1). Found and fixed 2 bugs: (1) `tide_eval.py` called a nonexistent `TIDERun.error_dAPs` attribute (real tidecv==1.0.1 API has no such field — `tide.summarize()`'s own printed table is used instead of re-extracting internals); (2) `bootstrap_significance.py` didn't suppress pycocotools' unconditional per-call stdout, making 200-iteration runs unreadable — wrapped `coco_ap()` in `contextlib.redirect_stdout`. All 5 scripts (export ×2 variants, ECE, TIDE, bootstrap) verified end-to-end; `pareto_plot.py` still blocked on missing DEIMv2/D-FINE FLOPs numbers (`results/model_stats.json` has TODO placeholders — run each repo's `tools/benchmark/get_info.py`). |
 | 2026-07-09 | **Server crash during full paper-default run** — GPU server went down/rebooted, silently killing the in-progress chained DEIMv2→D-FINE→YOLO11 job. DEIMv2 had reached epoch 47/132 (checkpointed) before dying around 2026-07-08 08:51; D-FINE/YOLO11 never started (chain order). Not discovered until ~21h later (server uptime showed a reboot at 2026-07-09 02:50, but DEIMv2's last log write predates that by ~18h — the process likely died earlier from an unknown cause, then the box rebooted separately). No OOM/disk-full/error evidence found (`dmesg` resets on reboot so the original crash reason is unrecoverable; RAM/disk were healthy post-reboot) — treated as an external server fault, not a bug in our training code. | Recovery: `last.pth` (with optimizer/EMA/lr_warmup state) resumed cleanly via `-r`, confirmed by `best_stat: {'epoch': 47, ...}` matching the pre-crash log exactly and training continuing at epoch 48 with correct loss trajectory. **Mistake made and fixed during recovery**: first resume attempt called `third_party/DEIMv2/train.py` directly and crashed with `KeyError: '_pymodule'` building the `CLAHE` transform — CLAHE is *not* registered anywhere inside `third_party/` (confirmed via repo-wide grep + clean `git status` in that sub-repo); it's injected at import time by our own git-tracked wrapper `src/training/train_deimv2.py` (same for D-FINE via `train_dfine.py`). **Any manual run/resume of DEIMv2 or D-FINE must always go through these `src/training/` wrappers, never `third_party/*/train.py` directly** — the raw third_party entrypoint will build a dataloader missing CLAHE (or crash outright, as it did here) since the registration only happens inside the wrapper's import chain. Second lesson: the resume command was briefly run outside tmux again (habit slip after the emergency), risking a repeat crash-and-lose-progress — restarted inside a fresh tmux session (`baselines`) with all 3 models chained via `&&` so the queue survives an SSH drop unattended. |
+| 2026-07-10 | DEIMv2 full paper-default run (132 epochs) completed successfully | Final val AP@0.5:0.95 = 0.8978 (AP@0.5 = 0.9768). The `&&`-chained tmux command survived the 2026-07-09 crash recovery cleanly — D-FINE started automatically the moment DEIMv2's process exited 0, no manual intervention needed. Confirms the chain-via-`&&` approach (adopted after the crash) is reliable for unattended multi-day multi-model runs. |
