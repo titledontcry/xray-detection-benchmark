@@ -4,8 +4,8 @@
 > ทำขั้นตอนเสร็จ → ติ๊ก checkbox → commit
 > ตัดสินใจอะไรใหม่ → บันทึกใน Decision Log ท้ายไฟล์ พร้อมวันที่และเหตุผล
 
-**Last updated**: 2026-07-10
-**Current phase**: Phase 2 (baselines) — 25-epoch reduced pass DONE for all 3 models (advisor check-in numbers ready); full paper-default run (132/132/100): **DEIMv2 COMPLETE** (AP@0.5:0.95=0.8978), **D-FINE in progress** (auto-chained, ~epoch 46/132 as of last check), YOLO11 queued to follow automatically
+**Last updated**: 2026-07-12
+**Current phase**: Phase 2 (baselines) — full paper-default run (132/132/100) **COMPLETE for all 3 models** (DEIMv2 0.8978 / D-FINE 0.8889 / YOLO11-S 0.8840 AP@0.5:0.95, val set). This is now the official Phase 2 baseline record. Next: Phase 3 HPO prep (persistent_workers/pin_memory fix), then Optuna.
 
 ---
 
@@ -86,7 +86,7 @@ framed as AI research (not just engineering comparison).
       paper-default run expected to raise all three further, especially
       AP@0.5:0.95 which has more headroom than the already-near-saturated
       AP@0.5.
-- [ ] Train all 3 models with paper-default hyperparameters (no tuning)
+- [x] **Train all 3 models with paper-default hyperparameters (no tuning) — ALL COMPLETE 2026-07-12**
   - **DEIMv2** (HGNetV2-S, `configs/model/deimv2/deimv2_pidray.yml`) — DONE:
     config wired, gradient accumulation (`src/training/train_deimv2.py`,
     `accum_micro_batch: 4`, verified 781 iters/epoch matching true batch=32
@@ -112,6 +112,12 @@ framed as AI research (not just engineering comparison).
     torchvision 0.27.1 (unpinned requirements.txt) vs DEIMv2's 0.20.1 —
     newer torchvision renamed the Transform hook `_transform`→`transform`,
     needed the same shim D-FINE's own `ConvertPILImage` already uses.
+    **Full paper-default run (132/132 epochs) COMPLETED 2026-07-11/12**,
+    auto-chained right after DEIMv2 finished (no manual step needed — see
+    2026-07-09 crash-recovery Decision Log entry for why that mattered).
+    Final val-set result (epoch 131): AP@0.5:0.95 = **0.8889**,
+    AP@0.5 = 0.9742, AP@0.75 = 0.9426, AP-small = 0.9223, AR@100 = 0.9400 —
+    up from the 25-epoch reduced pass's 0.818/0.936.
   - **YOLO11-S** (`configs/model/yolo11/{pidray_data,yolo11s_pidray}.yaml`,
     `src/training/train_yolo11.py`) — DONE: COCO→YOLO converter
     (`src/data/convert_coco_to_yolo.py`, symlinked images + generated labels,
@@ -124,6 +130,13 @@ framed as AI research (not just engineering comparison).
     CLAHE not yet wired for this model — ultralytics has its own optional
     Albumentations integration (different mechanism than DEIMv2/D-FINE's
     registry) that would need investigating separately if we want it applied.
+    **Full paper-default run (100 epochs) COMPLETED 2026-07-12** (4.366
+    GPU-hours, auto-chained after D-FINE — all 3 models finished
+    unattended overnight). Final val-set result: AP@0.5:0.95 = **0.8840**,
+    AP@0.5 = 0.979, Precision = 0.977, Recall = 0.959 — up from the
+    25-epoch reduced pass's 0.862/0.972. Weakest per-class AP@0.5:0.95:
+    bullet (0.734, also lowest recall 0.827 — smallest/most ambiguous
+    class), lighter (0.882). Strongest: wrench (0.955), hammer (0.951).
   - **Phase 5 prep DONE**: `src/data/remap_test_categories.py` materializes a
     0-indexed copy of the official test JSONs (easy/hard/hidden) at
     `data/processed/pidray_test_{easy,hard,hidden}.json` — verified counts
@@ -133,10 +146,21 @@ framed as AI research (not just engineering comparison).
 - [ ] Log baseline mAP as sanity floor
 - [x] **Compare all 3 models' val-set results side by side in one table**
       (AP@0.5:0.95, AP@0.5, AP-S, per-model params/FLOPs) — done once after the
-      25-epoch reduced pass (see table above, for the advisor check-in). Still
-      need to repeat after the full paper-default (132/132/100) run. Neither
-      table is the Phase 5 official comparison (that's on official test,
-      post-HPO, 3 seeds) — this is a baseline sanity comparison only.
+      25-epoch reduced pass (advisor check-in), and now again after the full
+      paper-default (132/132/100) run below. Neither table is the Phase 5
+      official comparison (that's on official test, post-HPO, 3 seeds) — this
+      is a baseline sanity comparison only.
+
+      **Full paper-default run — final val-set results (2026-07-12):**
+
+      | Model | AP@0.5:0.95 | AP@0.5 | AP@0.75 | AP-small | AR@100 |
+      |-------|-------------|--------|---------|----------|--------|
+      | DEIMv2 | **0.8978** | 0.9768 | 0.9506 | 0.9259 | 0.9388 |
+      | D-FINE | 0.8889 | 0.9742 | 0.9426 | 0.9223 | 0.9400 |
+      | YOLO11-S | 0.8840 | **0.9790** | — | — | — |
+
+      params/FLOPs still TODO for DEIMv2/D-FINE (queued: each repo's
+      `tools/benchmark/get_info.py`) — YOLO11-S: 9.4M params, 21.3 GFLOPs.
 
 ### Phase 3 — HPO (Optuna)
 - [ ] **Before starting**: enable `persistent_workers: True` + `pin_memory: True`
@@ -207,3 +231,4 @@ framed as AI research (not just engineering comparison).
 | 2026-07-08 | Built + dry-ran Phase 5 eval tooling early, during the full-epoch training's idle GPU-days | Rather than waste ~5-6 days of downtime, wrote and tested `src/eval/*` against the 25-epoch checkpoints (val set only — official test still untouched per hard rule #1). Found and fixed 2 bugs: (1) `tide_eval.py` called a nonexistent `TIDERun.error_dAPs` attribute (real tidecv==1.0.1 API has no such field — `tide.summarize()`'s own printed table is used instead of re-extracting internals); (2) `bootstrap_significance.py` didn't suppress pycocotools' unconditional per-call stdout, making 200-iteration runs unreadable — wrapped `coco_ap()` in `contextlib.redirect_stdout`. All 5 scripts (export ×2 variants, ECE, TIDE, bootstrap) verified end-to-end; `pareto_plot.py` still blocked on missing DEIMv2/D-FINE FLOPs numbers (`results/model_stats.json` has TODO placeholders — run each repo's `tools/benchmark/get_info.py`). |
 | 2026-07-09 | **Server crash during full paper-default run** — GPU server went down/rebooted, silently killing the in-progress chained DEIMv2→D-FINE→YOLO11 job. DEIMv2 had reached epoch 47/132 (checkpointed) before dying around 2026-07-08 08:51; D-FINE/YOLO11 never started (chain order). Not discovered until ~21h later (server uptime showed a reboot at 2026-07-09 02:50, but DEIMv2's last log write predates that by ~18h — the process likely died earlier from an unknown cause, then the box rebooted separately). No OOM/disk-full/error evidence found (`dmesg` resets on reboot so the original crash reason is unrecoverable; RAM/disk were healthy post-reboot) — treated as an external server fault, not a bug in our training code. | Recovery: `last.pth` (with optimizer/EMA/lr_warmup state) resumed cleanly via `-r`, confirmed by `best_stat: {'epoch': 47, ...}` matching the pre-crash log exactly and training continuing at epoch 48 with correct loss trajectory. **Mistake made and fixed during recovery**: first resume attempt called `third_party/DEIMv2/train.py` directly and crashed with `KeyError: '_pymodule'` building the `CLAHE` transform — CLAHE is *not* registered anywhere inside `third_party/` (confirmed via repo-wide grep + clean `git status` in that sub-repo); it's injected at import time by our own git-tracked wrapper `src/training/train_deimv2.py` (same for D-FINE via `train_dfine.py`). **Any manual run/resume of DEIMv2 or D-FINE must always go through these `src/training/` wrappers, never `third_party/*/train.py` directly** — the raw third_party entrypoint will build a dataloader missing CLAHE (or crash outright, as it did here) since the registration only happens inside the wrapper's import chain. Second lesson: the resume command was briefly run outside tmux again (habit slip after the emergency), risking a repeat crash-and-lose-progress — restarted inside a fresh tmux session (`baselines`) with all 3 models chained via `&&` so the queue survives an SSH drop unattended. |
 | 2026-07-10 | DEIMv2 full paper-default run (132 epochs) completed successfully | Final val AP@0.5:0.95 = 0.8978 (AP@0.5 = 0.9768). The `&&`-chained tmux command survived the 2026-07-09 crash recovery cleanly — D-FINE started automatically the moment DEIMv2's process exited 0, no manual intervention needed. Confirms the chain-via-`&&` approach (adopted after the crash) is reliable for unattended multi-day multi-model runs. |
+| 2026-07-12 | Full paper-default run complete for all 3 models — D-FINE (0.8889) and YOLO11-S (0.8840) finished, chaining all the way through unattended | This is now the official Phase 2 baseline record (supersedes the 25-epoch numbers). **RQ1 update**: at 25 epochs YOLO11 led (0.862 vs DEIMv2 0.852 / D-FINE 0.818); at full paper-default epoch count the ranking flipped — DEIMv2 (0.8978) and D-FINE (0.8889) both overtook YOLO11 (0.8840). Consistent with the earlier hypothesis that DETR-style Hungarian-matching optimization converges slower early on but keeps improving longer than YOLO's grid-based assignment, which saturates faster. Still not a rigorous RQ1 answer (needs significance testing via `bootstrap_significance.py`, and the real test is on Hard/Hidden occlusion subsets in Phase 5, not val) — but the full-epoch reversal itself is a notable, worth-reporting finding. Per-class breakdown (YOLO11) shows `bullet` as the weakest class (AP@0.5:0.95=0.734, recall=0.827) across the board — likely worth checking DEIMv2/D-FINE's per-class numbers too before Phase 5 for the same pattern. |
