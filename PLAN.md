@@ -163,19 +163,41 @@ framed as AI research (not just engineering comparison).
       `tools/benchmark/get_info.py`) — YOLO11-S: 9.4M params, 21.3 GFLOPs.
 
 ### Phase 3 — HPO (Optuna)
-- [ ] **Before starting**: enable `persistent_workers: True` + `pin_memory: True`
-      in DEIMv2/D-FINE's `train_dataloader`/`val_dataloader` config (currently
-      unset in `pidray_dataset.yml` for both). Diagnosed during the
-      full-epoch Phase 2 run: `time`/`data` split in training logs showed the
-      dataloader (not the GPU) as the bottleneck — CLAHE runs on-the-fly
-      per-image every epoch (intentional, see 2026-07-07 decision below) plus
-      worker respawn overhead every epoch (no `persistent_workers`) plus
-      slower CPU→GPU transfer (no `pin_memory`). The latter two are pure
-      infra settings that don't affect the CLAHE/HPO-flexibility tradeoff —
-      safe to fix without re-litigating that decision. Not fixed mid-run for
-      the current full-epoch pass to avoid disrupting a multi-day job
-      already in progress; do it before Optuna trials start instead.
-- [ ] Optuna study per model, ASHA pruning, val-set objective, SQLite storage for resume
+- [x] **Before starting**: enable `persistent_workers: True` + `pin_memory: True`
+      in DEIMv2/D-FINE's `train_dataloader`/`val_dataloader` config — **DONE
+      2026-07-12**, applied to both `train_dataloader` and `val_dataloader`
+      blocks in `configs/model/{deimv2,dfine}/pidray_dataset.yml`. Diagnosed
+      during the full-epoch Phase 2 run: `time`/`data` split in training logs
+      showed the dataloader (not the GPU) as the bottleneck — CLAHE runs
+      on-the-fly per-image every epoch (intentional, see 2026-07-07 decision
+      below) plus worker respawn overhead every epoch (no
+      `persistent_workers`) plus slower CPU→GPU transfer (no `pin_memory`).
+      Not yet re-verified with an actual training run that the `time`/`data`
+      split improved — do that as part of the first Optuna trial.
+- [x] **Optuna study scripts built + smoke-tested 2026-07-12**:
+      `src/hpo/optuna_{deimv2,dfine,yolo11}.py`. Scope locked 2026-07-12:
+      max_resource 40 epoch (DEIMv2/D-FINE) / 30 epoch (YOLO11, same
+      proportion of each paper's full budget), ASHA
+      (`SuccessiveHalvingPruner`, min_resource=5, reduction_factor=3,
+      rungs 5/15/40 or 5/15/30), 25 trials/model, objective = val
+      AP@0.5:0.95, SQLite storage at `results/optuna/{model}.db`
+      (gitignored — best config exported to YAML instead).
+      DEIMv2/D-FINE: one subprocess per trial (reuses the same
+      `src/training/train_{deimv2,dfine}.py` entrypoints as the real
+      training runs — deliberately NOT monkey-patching `solver.fit()`'s
+      internal epoch loop, since a safe hook into it was never confirmed
+      from source), polling `log.txt` for ASHA rung checkpoints,
+      `os.killpg` on prune. YOLO11: single in-process `model.train()` call
+      using ultralytics' `on_fit_epoch_end` callback + `trainer.stop=True`
+      (confirmed to actually break training early — smoke-tested: stopped
+      after 2 real epochs when told to, not the full 5 requested).
+      Every `-u`/`--update` nested-key override used (`optimizer.lr`,
+      `DEIMCriterion.weight_dict.loss_fgl`, list-valued keys like
+      `train_dataloader.dataset.transforms.policy.epoch=[1,1,1]`, etc.)
+      was verified against actual `cfg:` dump output from real 1-epoch
+      smoke-test runs before trusting it — see 2026-07-12 Decision Log.
+- [ ] Launch full 25-trial studies (DEIMv2 → D-FINE → YOLO11, sequential,
+      single GPU) — not yet started as of 2026-07-12.
 - [ ] Lock best config per model
 
 ### Phase 4 — Final training (weeks 5-7)
@@ -232,3 +254,6 @@ framed as AI research (not just engineering comparison).
 | 2026-07-09 | **Server crash during full paper-default run** — GPU server went down/rebooted, silently killing the in-progress chained DEIMv2→D-FINE→YOLO11 job. DEIMv2 had reached epoch 47/132 (checkpointed) before dying around 2026-07-08 08:51; D-FINE/YOLO11 never started (chain order). Not discovered until ~21h later (server uptime showed a reboot at 2026-07-09 02:50, but DEIMv2's last log write predates that by ~18h — the process likely died earlier from an unknown cause, then the box rebooted separately). No OOM/disk-full/error evidence found (`dmesg` resets on reboot so the original crash reason is unrecoverable; RAM/disk were healthy post-reboot) — treated as an external server fault, not a bug in our training code. | Recovery: `last.pth` (with optimizer/EMA/lr_warmup state) resumed cleanly via `-r`, confirmed by `best_stat: {'epoch': 47, ...}` matching the pre-crash log exactly and training continuing at epoch 48 with correct loss trajectory. **Mistake made and fixed during recovery**: first resume attempt called `third_party/DEIMv2/train.py` directly and crashed with `KeyError: '_pymodule'` building the `CLAHE` transform — CLAHE is *not* registered anywhere inside `third_party/` (confirmed via repo-wide grep + clean `git status` in that sub-repo); it's injected at import time by our own git-tracked wrapper `src/training/train_deimv2.py` (same for D-FINE via `train_dfine.py`). **Any manual run/resume of DEIMv2 or D-FINE must always go through these `src/training/` wrappers, never `third_party/*/train.py` directly** — the raw third_party entrypoint will build a dataloader missing CLAHE (or crash outright, as it did here) since the registration only happens inside the wrapper's import chain. Second lesson: the resume command was briefly run outside tmux again (habit slip after the emergency), risking a repeat crash-and-lose-progress — restarted inside a fresh tmux session (`baselines`) with all 3 models chained via `&&` so the queue survives an SSH drop unattended. |
 | 2026-07-10 | DEIMv2 full paper-default run (132 epochs) completed successfully | Final val AP@0.5:0.95 = 0.8978 (AP@0.5 = 0.9768). The `&&`-chained tmux command survived the 2026-07-09 crash recovery cleanly — D-FINE started automatically the moment DEIMv2's process exited 0, no manual intervention needed. Confirms the chain-via-`&&` approach (adopted after the crash) is reliable for unattended multi-day multi-model runs. |
 | 2026-07-12 | Full paper-default run complete for all 3 models — D-FINE (0.8889) and YOLO11-S (0.8840) finished, chaining all the way through unattended | This is now the official Phase 2 baseline record (supersedes the 25-epoch numbers). **RQ1 update**: at 25 epochs YOLO11 led (0.862 vs DEIMv2 0.852 / D-FINE 0.818); at full paper-default epoch count the ranking flipped — DEIMv2 (0.8978) and D-FINE (0.8889) both overtook YOLO11 (0.8840). Consistent with the earlier hypothesis that DETR-style Hungarian-matching optimization converges slower early on but keeps improving longer than YOLO's grid-based assignment, which saturates faster. Still not a rigorous RQ1 answer (needs significance testing via `bootstrap_significance.py`, and the real test is on Hard/Hidden occlusion subsets in Phase 5, not val) — but the full-epoch reversal itself is a notable, worth-reporting finding. Per-class breakdown (YOLO11) shows `bullet` as the weakest class (AP@0.5:0.95=0.734, recall=0.827) across the board — likely worth checking DEIMv2/D-FINE's per-class numbers too before Phase 5 for the same pattern. |
+| 2026-07-12 | HPO trial epoch budget scaled down from paper-default (132/132/100), with schedule-shape-preserving proportional scaling of epoch-tied hyperparameters (flat_epoch, no_aug_epoch, augmentation-removal milestones, close_mosaic) rather than leaving them at paper-default absolute values | Running full-epoch trials for HPO is infeasible (~25 GPU-hours × 25 trials × 2 DETR models ≈ weeks). But DEIMv2/D-FINE's LR/augmentation schedules key off *absolute* epoch numbers (e.g. `flat_epoch: 64`), not fractions — a naive `epoches=40` override without also scaling those milestones would mean every HPO trial trains under a schedule *shape* that never reaches the paper's flat-LR/no-aug phases, risking hyperparameters tuned for a fundamentally different (and non-representative) training regime. Scaling milestones proportionally (e.g. flat_epoch→19 at 40-epoch budget) keeps each trial a faithful miniature of the real 132-epoch run. |
+| 2026-07-12 | DEIMv2/D-FINE HPO trials driven via one subprocess per trial (reusing `src/training/train_{deimv2,dfine}.py` unmodified), not by monkey-patching `solver.fit()`'s internal per-epoch loop | A monkey-patch would need a verified hook into third_party solver internals (like the `train_one_epoch` patch already used for grad-accum) — that hook was never confirmed from source for mid-training Optuna reporting/pruning, and guessing wrong here risks repeating the 2026-07-09 CLAHE-registry crash-recovery mistake (guessed internals, wasted GPU-hours). The subprocess approach only needs `log.txt`'s per-epoch JSON lines (already proven reliable) and the existing `-r` resume/`-u` override CLI, both battle-tested by the full Phase 2 run and its crash recovery. |
+| 2026-07-12 | Verified the `-u`/`--update` nested-key override mechanism (including list-valued keys and model-specific criterion/scheduler key names) against real 1-epoch smoke-test runs for both DEIMv2 and D-FINE, and the `on_fit_epoch_end` + `trainer.stop` early-stop mechanism for YOLO11, before writing the full 25-trial Optuna studies | Same rationale as above — cheap (~1 minute per smoke test) insurance against discovering a wrong key name or broken assumption only after burning real GPU-hours on trial 1 of 25. All assumptions confirmed correct on the first attempt for both DEIMv2 and D-FINE (config keys matched `cfg:` dump output exactly); YOLO11's `trainer.epoch` 0-indexing and exact metric key name (`metrics/mAP50-95(B)`) also confirmed via a live inline test. |
