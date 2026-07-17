@@ -4,8 +4,8 @@
 > ทำขั้นตอนเสร็จ → ติ๊ก checkbox → commit
 > ตัดสินใจอะไรใหม่ → บันทึกใน Decision Log ท้ายไฟล์ พร้อมวันที่และเหตุผล
 
-**Last updated**: 2026-07-12
-**Current phase**: Phase 2 (baselines) — full paper-default run (132/132/100) **COMPLETE for all 3 models** (DEIMv2 0.8978 / D-FINE 0.8889 / YOLO11-S 0.8840 AP@0.5:0.95, val set). This is now the official Phase 2 baseline record. Next: Phase 3 HPO prep (persistent_workers/pin_memory fix), then Optuna.
+**Last updated**: 2026-07-17
+**Current phase**: Phase 3 (HPO) — all 3 Optuna studies (25 trials/model) **COMPLETE** (DEIMv2 best 0.8753 / D-FINE best 0.8553 / YOLO11-S best 0.8648 AP@0.5:0.95, reduced-epoch budget, val set). Phase 2 full paper-default baseline (132/132/100 epoch): DEIMv2 0.8978 / D-FINE 0.8889 / YOLO11-S 0.8840. Next: retrain best HPO configs at full epoch budget, 3 seeds each (Phase 4), to confirm final ranking (see 2026-07-17 Decision Log — rank reversal caveat).
 
 ---
 
@@ -196,9 +196,40 @@ framed as AI research (not just engineering comparison).
       `train_dataloader.dataset.transforms.policy.epoch=[1,1,1]`, etc.)
       was verified against actual `cfg:` dump output from real 1-epoch
       smoke-test runs before trusting it — see 2026-07-12 Decision Log.
-- [ ] Launch full 25-trial studies (DEIMv2 → D-FINE → YOLO11, sequential,
-      single GPU) — not yet started as of 2026-07-12.
-- [ ] Lock best config per model
+- [x] **Launch full 25-trial studies — COMPLETE 2026-07-17** (DEIMv2 → D-FINE
+      → YOLO11, sequential, single GPU, chained via tmux session `hpo`).
+      All 3 studies ran their full 25/25 trials with 0 stuck/running. ASHA
+      pruned aggressively as expected: DEIMv2 4 complete / 21 pruned, D-FINE
+      1 complete / 24 pruned, YOLO11-S 4 complete / 21 pruned.
+
+      Best trial per model (reduced-epoch budget — 40/40/30 epochs, val
+      AP@0.5:0.95 — **not comparable directly to the full 132/132/100-epoch
+      Phase 2 baseline numbers**, see caveat below):
+
+      | Model | Best AP@0.5:0.95 (reduced budget) | Best hyperparameters |
+      |---|---|---|
+      | DEIMv2 | 0.8753 | lr=4.93e-4, weight_decay=3.89e-3, warmup_duration=1000, loss_fgl=0.364 |
+      | D-FINE | 0.8553 | lr=3.06e-4, weight_decay=2.18e-3, warmup_duration=250, loss_fgl=0.135 |
+      | YOLO11-S | 0.8648 | lr0=2.68e-3, weight_decay=4.46e-5, box=9.62, cls=0.655, mosaic=0.780 |
+
+      **Caveat — rank reversal vs. Phase 2 full-run baseline**: at reduced
+      epoch budget, YOLO11-S (0.8648) beats D-FINE (0.8553), the opposite of
+      the full-epoch Phase 2 ranking (D-FINE 0.8889 > YOLO11-S 0.8845). Read
+      as a convergence-speed artifact, not a real ranking change: DETR-family
+      models (DEIMv2, D-FINE) converge slower than the CNN one-stage
+      YOLO11-S — visible in the Phase 2 training curves, where YOLO11-S is
+      already at ~0.86 by epoch 30 while D-FINE is still ~0.83. True ranking
+      can only be confirmed after best configs are retrained at full epoch
+      budget (Phase 4).
+
+      **Caveat — D-FINE best-trial confidence is low**: only 1 of 25 trials
+      reached `COMPLETE` (24 pruned before the final rung), so D-FINE's
+      "best" config is a single sample, not a selection among several
+      finishers like DEIMv2/YOLO11-S got. Worth a sanity-check re-run of
+      that config, or loosening the pruner for D-FINE specifically, before
+      fully locking it in.
+- [ ] Lock best config per model — pending Phase 4 full-epoch verification
+      of the results above (see caveats)
 
 ### Phase 4 — Final training (weeks 5-7)
 - [ ] 3 seeds × best config × 3 models; save all checkpoints
@@ -257,3 +288,4 @@ framed as AI research (not just engineering comparison).
 | 2026-07-12 | HPO trial epoch budget scaled down from paper-default (132/132/100), with schedule-shape-preserving proportional scaling of epoch-tied hyperparameters (flat_epoch, no_aug_epoch, augmentation-removal milestones, close_mosaic) rather than leaving them at paper-default absolute values | Running full-epoch trials for HPO is infeasible (~25 GPU-hours × 25 trials × 2 DETR models ≈ weeks). But DEIMv2/D-FINE's LR/augmentation schedules key off *absolute* epoch numbers (e.g. `flat_epoch: 64`), not fractions — a naive `epoches=40` override without also scaling those milestones would mean every HPO trial trains under a schedule *shape* that never reaches the paper's flat-LR/no-aug phases, risking hyperparameters tuned for a fundamentally different (and non-representative) training regime. Scaling milestones proportionally (e.g. flat_epoch→19 at 40-epoch budget) keeps each trial a faithful miniature of the real 132-epoch run. |
 | 2026-07-12 | DEIMv2/D-FINE HPO trials driven via one subprocess per trial (reusing `src/training/train_{deimv2,dfine}.py` unmodified), not by monkey-patching `solver.fit()`'s internal per-epoch loop | A monkey-patch would need a verified hook into third_party solver internals (like the `train_one_epoch` patch already used for grad-accum) — that hook was never confirmed from source for mid-training Optuna reporting/pruning, and guessing wrong here risks repeating the 2026-07-09 CLAHE-registry crash-recovery mistake (guessed internals, wasted GPU-hours). The subprocess approach only needs `log.txt`'s per-epoch JSON lines (already proven reliable) and the existing `-r` resume/`-u` override CLI, both battle-tested by the full Phase 2 run and its crash recovery. |
 | 2026-07-12 | Verified the `-u`/`--update` nested-key override mechanism (including list-valued keys and model-specific criterion/scheduler key names) against real 1-epoch smoke-test runs for both DEIMv2 and D-FINE, and the `on_fit_epoch_end` + `trainer.stop` early-stop mechanism for YOLO11, before writing the full 25-trial Optuna studies | Same rationale as above — cheap (~1 minute per smoke test) insurance against discovering a wrong key name or broken assumption only after burning real GPU-hours on trial 1 of 25. All assumptions confirmed correct on the first attempt for both DEIMv2 and D-FINE (config keys matched `cfg:` dump output exactly); YOLO11's `trainer.epoch` 0-indexing and exact metric key name (`metrics/mAP50-95(B)`) also confirmed via a live inline test. |
+| 2026-07-17 | All 3 Optuna HPO studies (25 trials/model, reduced-epoch budget) completed unattended via the same tmux-chained `&&` pattern used for Phase 2 recovery. Best val AP@0.5:0.95: DEIMv2 0.8753, D-FINE 0.8553, YOLO11-S 0.8648. Verified via `optuna.load_study()` against each `results/optuna/{model}.db` (25/25 trials, 0 running, for all 3) rather than trusting tmux scrollback, which turned out to be truncated by tmux's own history-limit and only showed YOLO11's tail | At this reduced epoch budget, YOLO11-S's tuned config (0.8648) beats D-FINE's (0.8553) — the opposite of the full-epoch Phase 2 ranking (D-FINE 0.8889 > YOLO11-S 0.8840). Interpreted as a convergence-speed artifact (DETR-family models converge slower early, consistent with the 2026-07-12 full-epoch-reversal finding in reverse), not a genuine ranking change — must be confirmed at full epoch budget in Phase 4 before treating either ranking as final. Separately, D-FINE's best trial is a single `COMPLETE` sample (24/25 pruned, vs. 4/25 surviving for DEIMv2 and YOLO11-S) — lower confidence in that specific config than the other two models', worth a sanity-check rerun before locking it in for Phase 4. |
