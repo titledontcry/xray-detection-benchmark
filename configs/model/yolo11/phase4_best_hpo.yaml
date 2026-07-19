@@ -1,0 +1,27 @@
+# Winning hyperparameters from Phase 3 Optuna HPO (best of 25 trials at
+# the reduced 30-epoch budget, val AP@0.5:0.95=0.8648 — see PLAN.md
+# Decision Log 2026-07-17). Reference record only — applied via
+# src/training/train_yolo11.py's `--key=value` override mechanism
+# (already how src/hpo/optuna_yolo11.py injects trial params), not by
+# editing yolo11s_pidray.yaml directly, so the Phase 2 paper-default
+# config stays untouched as the baseline record.
+#
+# Launch (run once per seed — 0, 1, 2 — for the final 3-seed record per
+# CLAUDE.md hard rule #7; full ultralytics-default 100-epoch budget,
+# already what yolo11s_pidray.yaml uses — no epoch override needed):
+#
+#   python src/training/train_yolo11.py \
+#     --cfg configs/model/yolo11/yolo11s_pidray.yaml \
+#     --seed=<0|1|2> \
+#     --name=yolo11s_pidray_phase4/seed<0|1|2> \
+#     --lr0=0.00268210629989773 \
+#     --weight_decay=4.4559451018018605e-05 \
+#     --box=9.624363569814477 \
+#     --cls=0.6552574942507758 \
+#     --mosaic=0.7798713039813766
+
+lr0: 0.00268210629989773
+weight_decay: 4.4559451018018605e-05
+box: 9.624363569814477
+cls: 0.6552574942507758
+mosaic: 0.7798713039813766

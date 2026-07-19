@@ -1,0 +1,33 @@
+# Winning hyperparameters from Phase 3 Optuna HPO (best of 40 trials — 25
+# original + 15 sanity-check extension — at the reduced 40-epoch budget,
+# val AP@0.5:0.95=0.8570 — see PLAN.md Decision Log 2026-07-19). The
+# sanity-check extension was run because the original 25-trial study had
+# only 1/25 COMPLETE trials for D-FINE (vs. 4/25 for DEIMv2/YOLO11-S); the
+# extension brought that to 5/40 COMPLETE, all clustered tightly around
+# this hyperparameter region, confirming it's a real good region and not a
+# lucky single sample. This file is a REFERENCE record only, not fed to
+# YAMLConfig via __include__ — same rationale as DEIMv2's phase4_best_hpo.yaml:
+# a raw `optimizer: {...}` block in an included YAML would be merged against
+# the paper config's existing `optimizer:` block (which also carries `type`
+# and a `params` list with a separate backbone-specific lr), and merge
+# semantics there were never verified. Apply these via the same `-u`/
+# `--update` dotted-key CLI mechanism already proven safe by every Optuna
+# HPO trial in src/hpo/optuna_dfine.py instead.
+#
+# Launch (run once per seed — 0, 1, 2 — for the final 3-seed record per
+# CLAUDE.md hard rule #7; full paper-default 132-epoch budget, no epoch-
+# schedule scaling needed since we're not epoch-constrained like HPO was):
+#
+#   torchrun --nproc_per_node=1 src/training/train_dfine.py \
+#     -c configs/model/dfine/dfine_pidray.yml \
+#     --seed <0|1|2> \
+#     --output-dir outputs/dfine_hgnetv2_s_pidray_phase4/seed<0|1|2> \
+#     -u optimizer.lr=0.00034213513273286 \
+#        optimizer.weight_decay=0.000253790402093864 \
+#        lr_warmup_scheduler.warmup_duration=250 \
+#        DFINECriterion.weight_dict.loss_fgl=0.11374730115262209
+
+lr: 0.00034213513273286
+weight_decay: 0.000253790402093864
+warmup_duration: 250
+loss_fgl: 0.11374730115262209

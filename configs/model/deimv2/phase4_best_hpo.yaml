@@ -1,0 +1,30 @@
+# Winning hyperparameters from Phase 3 Optuna HPO (best of 25 trials at
+# the reduced 40-epoch budget, val AP@0.5:0.95=0.8753 — see PLAN.md
+# Decision Log 2026-07-17). This file is a REFERENCE record only, not fed
+# to YAMLConfig via __include__: a raw `optimizer: {lr: ..., weight_decay:
+# ...}` block in an included YAML would be merged against the paper
+# config's existing `optimizer:` block (which also carries `type` and a
+# `params` list with a separate backbone-specific lr), and merge semantics
+# there were never verified — risks silently clobbering sibling keys, the
+# same class of mistake as the 2026-07-09 CLAHE-registry crash (guessed
+# internals instead of using a proven mechanism). Apply these via the same
+# `-u`/`--update` dotted-key CLI mechanism already proven safe by every
+# Optuna HPO trial in src/hpo/optuna_deimv2.py instead.
+#
+# Launch (run once per seed — 0, 1, 2 — for the final 3-seed record per
+# CLAUDE.md hard rule #7; full paper-default 132-epoch budget, no epoch-
+# schedule scaling needed since we're not epoch-constrained like HPO was):
+#
+#   torchrun --nproc_per_node=1 src/training/train_deimv2.py \
+#     -c configs/model/deimv2/deimv2_pidray.yml \
+#     --seed <0|1|2> \
+#     --output-dir outputs/deimv2_hgnetv2_s_pidray_phase4/seed<0|1|2> \
+#     -u optimizer.lr=0.0004925622618443786 \
+#        optimizer.weight_decay=0.0038880085304936808 \
+#        lr_warmup_scheduler.warmup_duration=1000 \
+#        DEIMCriterion.weight_dict.loss_fgl=0.36388173702163124
+
+lr: 0.0004925622618443786
+weight_decay: 0.0038880085304936808
+warmup_duration: 1000
+loss_fgl: 0.36388173702163124
