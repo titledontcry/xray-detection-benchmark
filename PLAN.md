@@ -22,7 +22,7 @@ framed as AI research (not just engineering comparison).
 - Classes: gun, knife, wrench, pliers, scissors, hammer, handcuffs, baton, sprayer, powerbank, lighter, bullet
 - License: academic/non-commercial only
 
-**Cross-dataset targets (RQ3)**: OPIXray (email request: rstao@buaa.edu.cn), SIXray test set (bbox via SIXray-D, gated form at ROSE Lab NTU)
+**Cross-dataset targets (RQ3)**: DROPPED 2026-07-28 — see Decision Log.
 
 ## 2. Research Questions
 
@@ -30,7 +30,7 @@ framed as AI research (not just engineering comparison).
 |----|----------|-----------|
 | RQ1 | DETR-based vs CNN one-stage on X-ray occlusion/overlap challenges | PIDray (esp. Hard/Hidden test) |
 | RQ2 | Resolution handling / tiling effects on AP-small | PIDray (revisit SAHI need after EDA) |
-| RQ3 | Cross-dataset domain gap within baggage X-ray | Train PIDray → test OPIXray / SIXray |
+| ~~RQ3~~ | ~~Cross-dataset domain gap within baggage X-ray~~ — **DROPPED 2026-07-28** | ~~Train PIDray → test OPIXray / SIXray~~ |
 | RQ4 | Operational detection rate @ fixed false-alarm rate | PIDray Hidden subset = stress test |
 
 ## 3. Key Decisions (locked)
@@ -254,7 +254,7 @@ framed as AI research (not just engineering comparison).
       still requires: HPO done, final 3-seed training done, official test
       JSONs used instead of val.
 - [ ] Full metric suite on official test (per Easy/Hard/Hidden)
-- [ ] Cross-dataset eval (RQ3) on OPIXray/SIXray — request access EARLY (long lead time)
+- [x] ~~Cross-dataset eval (RQ3) on OPIXray/SIXray~~ — **DROPPED 2026-07-28**, see Decision Log
 - [ ] TIDE, ECE, FAR analysis, bootstrap significance, Pareto curves
 
 ### Phase 6 — Write-up (weeks 10-12)
@@ -262,7 +262,6 @@ framed as AI research (not just engineering comparison).
 
 ## 5. Risks / Watch-outs
 
-- OPIXray + SIXray-D access requests take time → **submit requests during Phase 1, not Phase 5**
 - PIDray long-tail imbalance → may need class-weighted loss; check per-class AP early
 - 3 repos have conflicting dependencies → never merge conda envs
 - HPO compute vs 3-seed budget conflict → HPO with 1 seed only, 3 seeds only for finals
@@ -294,3 +293,6 @@ framed as AI research (not just engineering comparison).
 | 2026-07-12 | Verified the `-u`/`--update` nested-key override mechanism (including list-valued keys and model-specific criterion/scheduler key names) against real 1-epoch smoke-test runs for both DEIMv2 and D-FINE, and the `on_fit_epoch_end` + `trainer.stop` early-stop mechanism for YOLO11, before writing the full 25-trial Optuna studies | Same rationale as above — cheap (~1 minute per smoke test) insurance against discovering a wrong key name or broken assumption only after burning real GPU-hours on trial 1 of 25. All assumptions confirmed correct on the first attempt for both DEIMv2 and D-FINE (config keys matched `cfg:` dump output exactly); YOLO11's `trainer.epoch` 0-indexing and exact metric key name (`metrics/mAP50-95(B)`) also confirmed via a live inline test. |
 | 2026-07-17 | All 3 Optuna HPO studies (25 trials/model, reduced-epoch budget) completed unattended via the same tmux-chained `&&` pattern used for Phase 2 recovery. Best val AP@0.5:0.95: DEIMv2 0.8753, D-FINE 0.8553, YOLO11-S 0.8648. Verified via `optuna.load_study()` against each `results/optuna/{model}.db` (25/25 trials, 0 running, for all 3) rather than trusting tmux scrollback, which turned out to be truncated by tmux's own history-limit and only showed YOLO11's tail | At this reduced epoch budget, YOLO11-S's tuned config (0.8648) beats D-FINE's (0.8553) — the opposite of the full-epoch Phase 2 ranking (D-FINE 0.8889 > YOLO11-S 0.8840). Interpreted as a convergence-speed artifact (DETR-family models converge slower early, consistent with the 2026-07-12 full-epoch-reversal finding in reverse), not a genuine ranking change — must be confirmed at full epoch budget in Phase 4 before treating either ranking as final. Separately, D-FINE's best trial is a single `COMPLETE` sample (24/25 pruned, vs. 4/25 surviving for DEIMv2 and YOLO11-S) — lower confidence in that specific config than the other two models', worth a sanity-check rerun before locking it in for Phase 4. |
 | 2026-07-19 | Extended `dfine_pidray` Optuna study with 15 more trials (`--n-trials 15`, appended via `load_if_exists=True` to the existing SQLite study — 40 total) to resolve the 2026-07-17 low-confidence caveat on D-FINE's single-`COMPLETE`-trial best config | 5/40 trials now reached `COMPLETE` (up from 1/25). New best is trial 37 (AP@0.5:0.95=0.8570, up slightly from 0.8553), and all 5 finishers cluster tightly (0.8528-0.8570) in a consistent hyperparameter region (lr≈3.0-3.4e-4, warmup_duration 250-500, loss_fgl 0.06-0.13) — confirms the original trial wasn't a lucky outlier. Caveat resolved; D-FINE's HPO config is now locked in alongside DEIMv2/YOLO11-S, all 3 documented in `configs/model/{deimv2,dfine,yolo11}/phase4_best_hpo.yaml` (reference-only files, applied via each model's proven CLI override mechanism, not raw YAML merge — see those files' header comments). Phase 3 is now fully closed; ranking at reduced-epoch budget remains DEIMv2 (0.8753) > YOLO11-S (0.8648) > D-FINE (0.8570), still to be confirmed/overturned at full epoch budget in Phase 4. |
+| 2026-07-22 | Phase 4 launch (DEIMv2→D-FINE→YOLO11 chain in tmux session `phase4`) partially failed | DEIMv2 completed all 3 seeds successfully (val AP@0.5:0.95 = 0.8963–0.8977, consistent with Phase 2's 0.8978). D-FINE seed0 crashed immediately (`-u` override CLI args corrupted while being pasted into the terminal — two dotted keys merged into a bogus `warmuDFINECriterion` key). YOLO11 never started (invoked without the `python` prefix → `Permission denied`; the surrounding 3-seed loop was also corrupted in the same paste, throwing a shell syntax error). The crashed session sat unnoticed in tmux for 6 days (idle GPU) until discovered 2026-07-27. |
+| 2026-07-27 | Root-caused the D-FINE/YOLO11 crashes as terminal copy-paste corruption, not a code/config bug — confirmed by reading the source `phase4_best_hpo.yaml` comments (correctly formatted) and noting the identical `-u`/`--update` override mechanism had already run correctly dozens of times (every Optuna HPO trial, plus DEIMv2's own 3 successful Phase 4 seeds) | Fix: committed `scripts/train_phase4_dfine.sh` and `scripts/train_phase4_yolo11.sh` (3-seed loops, exact hyperparameters from each model's locked `phase4_best_hpo.yaml`) instead of relying on pasted multi-line terminal commands, eliminating the corruption vector entirely. D-FINE seed0 relaunched successfully via the new script on 2026-07-28. |
+| 2026-07-28 | **Dropped RQ3 (cross-dataset domain gap, OPIXray/SIXray) entirely** — removed from Research Questions, Phase 5 checklist, and Risks | Neither OPIXray (email request) nor SIXray-D (gated ROSE Lab NTU form) access had actually been requested despite the Phase 1 risk note to do so early; with the project already 22 days in and Phase 4 (3-seed full seeds for D-FINE/YOLO11, ~3-4 more days of single-GPU sequential compute remaining) still not done, waiting on an unpredictable external access grant was no longer an acceptable schedule risk. Scope now: RQ1, RQ2, RQ4 on PIDray only. |
