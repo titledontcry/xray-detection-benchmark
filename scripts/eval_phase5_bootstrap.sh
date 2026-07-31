@@ -1,23 +1,26 @@
 #!/usr/bin/env bash
 # Run ON THE SERVER, in a conda env with pycocotools (e.g. `dfine`), from
-# repo root. Usage: bash scripts/eval_phase5_bootstrap.sh [n_bootstrap]
+# repo root. Usage: bash scripts/eval_phase5_bootstrap.sh [n_bootstrap] [splits]
+#   splits = space-separated list, default "easy hard hidden", e.g. "hidden"
 #
 # Phase 5: paired bootstrap significance test for all 3 model pairs, per
 # split, using the same representative-seed choice as eval_phase5_tide.sh
 # (diagnostic tool, not the headline metric — see PLAN.md Decision Log
 # 2026-08-01).
 #
-# WARNING: bootstrap_significance.py re-runs a full COCOeval per resample
-# per model (its own docstring calls n_bootstrap=200 "a quick check", but
-# D-FINE/DEIMv2's prediction files here are unusually large — low --conf
-# threshold at export time means far more boxes per image than typical —
-# so 200 resamples may take much longer than that docstring assumes).
-# RUN A SMOKE TEST FIRST with a small n (e.g. `bash scripts/eval_phase5_bootstrap.sh 10`)
-# to see real per-comparison timing before committing to a bigger n on all
-# 9 (3 splits x 3 pairs) comparisons.
+# A 2026-08-01 n=10 smoke test (all 3 easy-split pairs) measured ~6-7 min per
+# comparison — the docstring's own "n=200 is a quick check" assumption does
+# NOT hold here (D-FINE/DEIMv2's prediction files are unusually large — low
+# --conf export threshold means far more boxes per image than typical), so
+# n=200 across all 9 (3 splits x 3 pairs) comparisons would take ~20 hours.
+# Scope narrowed to Hidden only (`bash scripts/eval_phase5_bootstrap.sh 100 hidden`)
+# since that's the only split with a ranking surprise (D-FINE < YOLO11) that
+# actually needs a significance test — Easy/Hard rankings already match
+# every seed with small std, nothing there is in question.
 set -euo pipefail
 
 N="${1:-200}"
+SPLITS="${2:-easy hard hidden}"
 
 declare -A DFINE_SEED=( [easy]=0 [hard]=0 [hidden]=0 )
 declare -A DEIMV2_SEED=( [easy]=0 [hard]=1 [hidden]=2 )
@@ -25,7 +28,7 @@ declare -A YOLO11_SEED=( [easy]=2 [hard]=1 [hidden]=2 )
 
 mkdir -p results/bootstrap
 
-for split in easy hard hidden; do
+for split in ${SPLITS}; do
   gt="data/processed/pidray_test_${split}.json"
   dfine="results/predictions/phase5/dfine_${split}_seed${DFINE_SEED[$split]}.json"
   deimv2="results/predictions/phase5/deimv2_${split}_seed${DEIMV2_SEED[$split]}.json"
