@@ -5,7 +5,7 @@
 > ตัดสินใจอะไรใหม่ → บันทึกใน Decision Log ท้ายไฟล์ พร้อมวันที่และเหตุผล
 
 **Last updated**: 2026-08-01
-**Current phase**: Phase 4 (final 3-seed training) — **COMPLETE** for all 3 models. Full-epoch, 3-seed mean AP@0.5:0.95: DEIMv2 0.8969±0.0007 / D-FINE 0.8896±0.0009 / YOLO11-S 0.8805±0.0004 — HPO-tuned configs did not meaningfully beat the Phase 2 paper-default baseline (DEIMv2 0.8978 / D-FINE 0.8889 / YOLO11-S 0.8840); ranking unchanged (DEIMv2 > D-FINE > YOLO11-S). See 2026-08-01 Decision Log. Next: Phase 5 — official test-set evaluation (Easy/Hard/Hidden).
+**Current phase**: Phase 5 (official test-set evaluation) — full metric suite **COMPLETE** for all 3 models x 3 seeds on Easy/Hard/Hidden. AP@0.5:0.95 mean±std: DEIMv2 0.7999/0.7657/0.5810, D-FINE 0.7777/0.7488/0.5103, YOLO11-S 0.7481/0.7364/0.5401 (Easy/Hard/Hidden). Ranking matches Phase 2/4 on Easy/Hard, but **flips on Hidden** (YOLO11-S beats D-FINE) — see 2026-08-01 Decision Log. Remaining Phase 5 work: TIDE/ECE/bootstrap-significance/Pareto. Next after that: Phase 6 write-up.
 
 ---
 
@@ -278,7 +278,37 @@ framed as AI research (not just engineering comparison).
       **tooling validation only, not a Phase 5 run** — the real Phase 5 run
       still requires: HPO done, final 3-seed training done, official test
       JSONs used instead of val.
-- [ ] Full metric suite on official test (per Easy/Hard/Hidden)
+- [x] **Full metric suite on official test (per Easy/Hard/Hidden) — COMPLETE
+      2026-08-01**. All 3 models x 3 seeds exported (`scripts/eval_phase5_export_*.sh`,
+      `best_stg2.pth` preferred / `best_stg1.pth` fallback when a seed never
+      wrote one — DEIMv2 seed1 didn't) and scored against the official test
+      JSONs via `src/eval/compute_metrics.py` (`scripts/eval_phase5_compute_metrics.sh`).
+
+      **AP@0.5:0.95, mean±std over 3 seeds:**
+
+      | Model | Easy | Hard | Hidden |
+      |---|---|---|---|
+      | DEIMv2 | **0.7999**±0.0017 | **0.7657**±0.0045 | **0.5810**±0.0055 |
+      | D-FINE | 0.7777±0.0062 | 0.7488±0.0007 | 0.5103±0.0055 |
+      | YOLO11-S | 0.7481±0.0039 | 0.7364±0.0023 | 0.5401±0.0105 |
+
+      **Finding 1 — large val→test gap**: AP drops sharply from the Phase 4
+      val-set numbers (~0.88-0.90) to test-easy (~0.75-0.80), test-hard
+      (~0.74-0.77), and test-hidden (~0.51-0.58). Expected given PIDray's
+      test set is a fully separate collection from train/val (not just a
+      harder held-out slice of the same distribution), but the size of the
+      gap — especially on Hidden — is itself a reportable result about
+      train/val being an optimistic proxy for real deployment difficulty.
+
+      **Finding 2 — rank reversal on Hidden**: ranking is DEIMv2 > D-FINE >
+      YOLO11-S on both Easy and Hard (matches Phase 2/4 val-set ranking), but
+      on **Hidden it flips to DEIMv2 > YOLO11-S > D-FINE** — D-FINE drops to
+      last (0.5103), behind YOLO11-S (0.5401), despite beating YOLO11-S on
+      every other split. Suggests D-FINE (DETR-based, Hungarian matching) is
+      more sensitive to the heavy-occlusion/clutter conditions that define
+      the Hidden subset than YOLO11-S's CNN one-stage grid assignment —
+      directly relevant to RQ2 (robustness across difficulty tiers), not
+      just RQ1 (aggregate accuracy).
 - [x] ~~Cross-dataset eval (RQ3) on OPIXray/SIXray~~ — **DROPPED 2026-07-28**, see Decision Log
 - [ ] TIDE, ECE, FAR analysis, bootstrap significance, Pareto curves
 
@@ -322,3 +352,4 @@ framed as AI research (not just engineering comparison).
 | 2026-07-27 | Root-caused the D-FINE/YOLO11 crashes as terminal copy-paste corruption, not a code/config bug — confirmed by reading the source `phase4_best_hpo.yaml` comments (correctly formatted) and noting the identical `-u`/`--update` override mechanism had already run correctly dozens of times (every Optuna HPO trial, plus DEIMv2's own 3 successful Phase 4 seeds) | Fix: committed `scripts/train_phase4_dfine.sh` and `scripts/train_phase4_yolo11.sh` (3-seed loops, exact hyperparameters from each model's locked `phase4_best_hpo.yaml`) instead of relying on pasted multi-line terminal commands, eliminating the corruption vector entirely. D-FINE seed0 relaunched successfully via the new script on 2026-07-28. |
 | 2026-07-28 | **Dropped RQ3 (cross-dataset domain gap, OPIXray/SIXray) entirely** — removed from Research Questions, Phase 5 checklist, and Risks | Neither OPIXray (email request) nor SIXray-D (gated ROSE Lab NTU form) access had actually been requested despite the Phase 1 risk note to do so early; with the project already 22 days in and Phase 4 (3-seed full seeds for D-FINE/YOLO11, ~3-4 more days of single-GPU sequential compute remaining) still not done, waiting on an unpredictable external access grant was no longer an acceptable schedule risk. Scope now: RQ1, RQ2, RQ4 on PIDray only. |
 | 2026-08-01 | **Phase 4 (3-seed final training) complete for all 3 models** — read final AP directly from each seed's `log.txt`/`results.csv` last row rather than trusting scrollback (same lesson as 2026-07-17's Optuna check). Mean AP@0.5:0.95: DEIMv2 0.8969±0.0007, D-FINE 0.8896±0.0009, YOLO11-S 0.8805±0.0004 | Confirms the Phase 2 ranking (DEIMv2 > D-FINE > YOLO11-S) holds at full epoch budget — the reduced-epoch-budget reversal seen in Phase 3 HPO (YOLO11-S briefly beating D-FINE) was indeed a convergence-speed artifact, not real. Also: HPO-tuned configs did **not** meaningfully beat paper defaults at full budget (DEIMv2/D-FINE within ~0.001, noise-level; YOLO11-S ~0.0035 *worse*, outside its own cross-seed std) — a legitimate finding about HPO's budget-dependence worth reporting in the paper, not a failed experiment. Phase 4 checklist closed; proceeding to Phase 5 (official test-set eval). |
+| 2026-08-01 | **Phase 5 full metric suite complete** — all 3 models x 3 seeds exported (`scripts/eval_phase5_export_*.sh`) and scored (`scripts/eval_phase5_compute_metrics.sh`) against the official PIDray test split (Easy/Hard/Hidden), the first time this data has been touched (hard rule #1). AP@0.5:0.95 mean±std: DEIMv2 0.7999±0.0017 / 0.7657±0.0045 / 0.5810±0.0055, D-FINE 0.7777±0.0062 / 0.7488±0.0007 / 0.5103±0.0055, YOLO11-S 0.7481±0.0039 / 0.7364±0.0023 / 0.5401±0.0105 (Easy/Hard/Hidden) | Two findings worth reporting: (1) large val→test gap (~0.88-0.90 on val down to ~0.75-0.80/0.74-0.77/0.51-0.58 on test easy/hard/hidden) — expected since PIDray's test set is a genuinely separate collection, but the magnitude is itself notable; (2) **ranking reversal on Hidden only** — Easy/Hard both keep the Phase 2/4 ranking (DEIMv2 > D-FINE > YOLO11-S), but Hidden flips to DEIMv2 > YOLO11-S > D-FINE, with D-FINE dropping to last despite leading YOLO11-S everywhere else. Read as D-FINE's DETR/Hungarian-matching architecture being more sensitive to Hidden's heavy occlusion/clutter than YOLO11-S's CNN grid-based assignment — a genuine RQ2 (difficulty-tier robustness) finding, not noise (D-FINE's 3-seed std on Hidden is 0.0055, an order of magnitude smaller than its 0.03 gap to YOLO11-S there). Remaining Phase 5 work: TIDE, ECE, bootstrap significance, Pareto curves — proposed to run on one representative seed per model (closest to that model's 3-seed mean) rather than all 3, since these are diagnostic/interpretive, not the headline metric. |
