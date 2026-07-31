@@ -4,8 +4,8 @@
 > ทำขั้นตอนเสร็จ → ติ๊ก checkbox → commit
 > ตัดสินใจอะไรใหม่ → บันทึกใน Decision Log ท้ายไฟล์ พร้อมวันที่และเหตุผล
 
-**Last updated**: 2026-07-19
-**Current phase**: Phase 3 (HPO) — **COMPLETE**, best config locked for all 3 models (DEIMv2 0.8753 / D-FINE 0.8570 / YOLO11-S 0.8648 AP@0.5:0.95, reduced-epoch budget, val set). Phase 2 full paper-default baseline (132/132/100 epoch): DEIMv2 0.8978 / D-FINE 0.8889 / YOLO11-S 0.8840. Next: Phase 4 — retrain best HPO configs at full epoch budget, 3 seeds each, to confirm final ranking (see 2026-07-17/2026-07-19 Decision Log — rank reversal caveat).
+**Last updated**: 2026-08-01
+**Current phase**: Phase 4 (final 3-seed training) — **COMPLETE** for all 3 models. Full-epoch, 3-seed mean AP@0.5:0.95: DEIMv2 0.8969±0.0007 / D-FINE 0.8896±0.0009 / YOLO11-S 0.8805±0.0004 — HPO-tuned configs did not meaningfully beat the Phase 2 paper-default baseline (DEIMv2 0.8978 / D-FINE 0.8889 / YOLO11-S 0.8840); ranking unchanged (DEIMv2 > D-FINE > YOLO11-S). See 2026-08-01 Decision Log. Next: Phase 5 — official test-set evaluation (Easy/Hard/Hidden).
 
 ---
 
@@ -236,7 +236,32 @@ framed as AI research (not just engineering comparison).
       above); full-epoch Phase 4 retrain will confirm final ranking
 
 ### Phase 4 — Final training (weeks 5-7)
-- [ ] 3 seeds × best config × 3 models; save all checkpoints
+- [x] **3 seeds × best config × 3 models — COMPLETE 2026-08-01** (all checkpoints
+      saved). Full paper-default epoch budget (132/132/100), HPO-locked
+      hyperparameters from `configs/model/{deimv2,dfine,yolo11}/phase4_best_hpo.yaml`,
+      launched via the committed `scripts/train_phase4_{dfine,yolo11}.sh` (DEIMv2
+      chained manually before the crash — see 2026-07-22/27 Decision Log).
+
+      | Model | Phase 4 mean AP@0.5:0.95 | std | seed0 / seed1 / seed2 | Phase 2 baseline (1 seed) |
+      |---|---|---|---|---|
+      | DEIMv2 | **0.8969** | ±0.0007 | 0.8963 / 0.8968 / 0.8977 | 0.8978 |
+      | D-FINE | 0.8896 | ±0.0009 | 0.8901 / 0.8906 / 0.8900 | 0.8889 |
+      | YOLO11-S | 0.8805 | ±0.0004 | 0.88077 / 0.88005 / 0.88054 | 0.8840 |
+
+      **Finding**: HPO-tuned configs do not meaningfully outperform the Phase 2
+      paper-default baseline at full epoch budget. DEIMv2/D-FINE land within
+      ~0.001 of baseline (noise-level, comparable to the cross-seed std itself).
+      YOLO11-S's tuned config is ~0.0035 *below* its paper-default baseline —
+      small in absolute terms but larger than its own cross-seed std (±0.0004),
+      so likely a real (if minor) regression, not just noise. Same root cause as
+      the 2026-07-17 rank-reversal caveat: the reduced-epoch HPO budget favors
+      hyperparameters that help early convergence, which don't necessarily hold
+      up over a full training run — worth reporting as a finding (HPO gains are
+      budget-dependent) rather than treating Phase 4 as pure formality. Final
+      model ranking (DEIMv2 > D-FINE > YOLO11-S) matches Phase 2 exactly — the
+      reduced-epoch-budget reversal (YOLO11-S > D-FINE) documented in Phase 3
+      does not hold at full epoch budget, confirming it was a convergence-speed
+      artifact as hypothesized.
 
 ### Phase 5 — Evaluation (weeks 8-10)
 - [x] **Tooling pre-built and dry-run tested (2026-07-08)**, ahead of schedule
@@ -296,3 +321,4 @@ framed as AI research (not just engineering comparison).
 | 2026-07-22 | Phase 4 launch (DEIMv2→D-FINE→YOLO11 chain in tmux session `phase4`) partially failed | DEIMv2 completed all 3 seeds successfully (val AP@0.5:0.95 = 0.8963–0.8977, consistent with Phase 2's 0.8978). D-FINE seed0 crashed immediately (`-u` override CLI args corrupted while being pasted into the terminal — two dotted keys merged into a bogus `warmuDFINECriterion` key). YOLO11 never started (invoked without the `python` prefix → `Permission denied`; the surrounding 3-seed loop was also corrupted in the same paste, throwing a shell syntax error). The crashed session sat unnoticed in tmux for 6 days (idle GPU) until discovered 2026-07-27. |
 | 2026-07-27 | Root-caused the D-FINE/YOLO11 crashes as terminal copy-paste corruption, not a code/config bug — confirmed by reading the source `phase4_best_hpo.yaml` comments (correctly formatted) and noting the identical `-u`/`--update` override mechanism had already run correctly dozens of times (every Optuna HPO trial, plus DEIMv2's own 3 successful Phase 4 seeds) | Fix: committed `scripts/train_phase4_dfine.sh` and `scripts/train_phase4_yolo11.sh` (3-seed loops, exact hyperparameters from each model's locked `phase4_best_hpo.yaml`) instead of relying on pasted multi-line terminal commands, eliminating the corruption vector entirely. D-FINE seed0 relaunched successfully via the new script on 2026-07-28. |
 | 2026-07-28 | **Dropped RQ3 (cross-dataset domain gap, OPIXray/SIXray) entirely** — removed from Research Questions, Phase 5 checklist, and Risks | Neither OPIXray (email request) nor SIXray-D (gated ROSE Lab NTU form) access had actually been requested despite the Phase 1 risk note to do so early; with the project already 22 days in and Phase 4 (3-seed full seeds for D-FINE/YOLO11, ~3-4 more days of single-GPU sequential compute remaining) still not done, waiting on an unpredictable external access grant was no longer an acceptable schedule risk. Scope now: RQ1, RQ2, RQ4 on PIDray only. |
+| 2026-08-01 | **Phase 4 (3-seed final training) complete for all 3 models** — read final AP directly from each seed's `log.txt`/`results.csv` last row rather than trusting scrollback (same lesson as 2026-07-17's Optuna check). Mean AP@0.5:0.95: DEIMv2 0.8969±0.0007, D-FINE 0.8896±0.0009, YOLO11-S 0.8805±0.0004 | Confirms the Phase 2 ranking (DEIMv2 > D-FINE > YOLO11-S) holds at full epoch budget — the reduced-epoch-budget reversal seen in Phase 3 HPO (YOLO11-S briefly beating D-FINE) was indeed a convergence-speed artifact, not real. Also: HPO-tuned configs did **not** meaningfully beat paper defaults at full budget (DEIMv2/D-FINE within ~0.001, noise-level; YOLO11-S ~0.0035 *worse*, outside its own cross-seed std) — a legitimate finding about HPO's budget-dependence worth reporting in the paper, not a failed experiment. Phase 4 checklist closed; proceeding to Phase 5 (official test-set eval). |
