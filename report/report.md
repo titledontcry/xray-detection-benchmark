@@ -145,29 +145,50 @@
 
 *หมายเหตุ*: ทั้ง DEIMv2 และ D-FINE ในการทดลองนี้ถูกกำหนดให้ใช้ backbone **HGNetV2-S เดียวกัน** โดยตั้งใจ (DEIMv2 รองรับ backbone แบบ DINOv3 self-supervised ด้วย แต่ถูกปิดการใช้งานในการทดลองนี้) เพื่อให้ความแตกต่างของผลลัพธ์ระหว่างสองโมเดลนี้สะท้อนความแตกต่างของกลไกการจับคู่ผลทำนายและ loss function เป็นหลัก ไม่ใช่ผลจาก backbone ที่ต่างกัน — เป็นการควบคุมตัวแปร (control variable) ที่สำคัญสำหรับการเปรียบเทียบที่เป็นธรรม
 
-### 4.1 DEIMv2
+DEIMv2 และ D-FINE ในการทดลองนี้ใช้โครงกระดูก (skeleton) เดียวกันทุกประการ — **HGNetV2-B0 backbone → HybridEncoder → Transformer Decoder 3 ชั้น** (ตรวจสอบจาก config จริงที่ใช้เทรน ไม่ใช่ค่า default ของ variant ขนาดใหญ่กว่า) ต่างกันเฉพาะกลยุทธ์การจับคู่/loss ระหว่างเทรนและหัวทำนายตำแหน่งกรอบเท่านั้น จึงอธิบายรวมเป็นหัวข้อเดียว (4.1) แล้วแยกอธิบายจุดต่างในหัวข้อ 4.2/4.3
 
-DEIMv2 ประกอบด้วย 3 ส่วนหลัก: (1) **Backbone** (HGNetV2-S) ทำหน้าที่สกัด feature map หลายระดับความละเอียดจากภาพนำเข้า (2) **Transformer Encoder-Decoder** ที่รับ feature map มาประมวลผลผ่านกลไก self-attention เพื่อสร้างชุด object query จำนวนคงที่ต่อภาพ และ (3) **Prediction Head** ที่แปลง object query แต่ละตัวเป็นคลาสและตำแหน่ง bounding box
+### 4.1 โครงสร้างร่วมของ DEIMv2 และ D-FINE
 
-จุดต่างสำคัญของ DEIMv2 จากสถาปัตยกรรม DETR ดั้งเดิมอยู่ที่ขั้นตอนการเทรน ไม่ใช่โครงสร้างโมเดล: DEIMv2 ใช้กลยุทธ์ **Dense One-to-One (O2O) matching** ที่เพิ่มจำนวน positive sample ต่อภาพระหว่างการเทรนผ่านการเพิ่ม synthetic target จาก data augmentation มาตรฐาน ร่วมกับ **Matchability-Aware Loss (MAL)** ที่ปรับน้ำหนัก loss ตามคุณภาพการจับคู่ (matching quality) ของแต่ละคู่ ทำให้โมเดลลู่เข้า (converge) ได้เร็วกว่า DETR ดั้งเดิมอย่างมาก โดยยังคงคุณสมบัติ end-to-end (ไม่ต้องใช้ NMS หลังการทำนาย) ไว้เหมือนเดิม
+**ภาพที่ 4** Overall Architecture ของ DEIMv2/D-FINE (HGNetV2-B0 + HybridEncoder + Transformer Decoder)
 
-### 4.2 D-FINE
+<!-- TODO: วาด diagram หรือนำรูปจาก paper ต้นฉบับ (D-FINE ICLR 2025 / DEIM CVPR 2025, arXiv:2410.13842 และ arXiv:2412.04234)
+     มาปรับให้ตรงกับ config จริงที่ใช้ (B0/S scale, decoder 3 ชั้น) แล้วใส่ที่ figures/model_architecture_detr.png -->
 
-D-FINE ใช้โครงสร้างพื้นฐานคล้ายกับ DEIMv2 (Backbone HGNetV2-S + Transformer Encoder-Decoder) แต่จุดต่างสำคัญอยู่ที่วิธีการทำนายตำแหน่ง bounding box: แทนที่จะทำนายค่าพิกัด (x, y, w, h) โดยตรงแบบ regression เหมือนโมเดล DETR ทั่วไป D-FINE ใช้เทคนิค **Fine-grained Distribution Refinement (FDR)** ทำนายการกระจายความน่าจะเป็น (probability distribution) ของตำแหน่งขอบแต่ละด้านของกรอบ แล้วค่อยปรับละเอียด (refine) แบบวนซ้ำหลายรอบผ่าน decoder layer ทำให้ตำแหน่งกรอบมีความแม่นยำสูงขึ้นโดยเฉพาะกรณีขอบวัตถุไม่ชัดเจน
+**Backbone — HGNetV2-B0**: รับภาพขนาด 640×640 พิกเซล (หลัง CLAHE + resize) ประมวลผลผ่าน Stem block (convolution สกัดฟีเจอร์เบื้องต้น) ตามด้วยโครงสร้างแบบ 4 สเตจปิรามิด (HG_Stage) แต่ละสเตจประกอบด้วย HG_Block หลายตัวเรียงต่อกัน ลดขนาดความละเอียดภาพลงทีละสเตจในขณะที่จำนวน channel เพิ่มขึ้น การทดลองนี้ดึงฟีเจอร์ออกจาก **สเตจที่ 1, 2 และ 3** (`return_idx: [1, 2, 3]`) เป็น feature map 3 ระดับ ขนาด channel **256, 512 และ 1024** ตามลำดับ ส่งต่อให้ HybridEncoder
 
-นอกจากนี้ D-FINE ยังใช้เทคนิค **Global Optimal Localization Self-Distillation (GO-LSD)** ที่ให้ decoder layer ลึกๆ (ซึ่งทำนายแม่นยำกว่า) ทำหน้าที่เป็น "ครู" ถ่ายทอดความรู้ให้ decoder layer ตื้นๆ ระหว่างการเทรน ช่วยเพิ่มความแม่นยำโดยรวมโดยไม่เพิ่มต้นทุนการคำนวณตอน inference เช่นเดียวกับ DEIMv2, D-FINE ใช้กลไก **Hungarian matching** แบบ one-to-one ระหว่างผลทำนายกับ ground truth และไม่ต้องใช้ NMS
+**HybridEncoder**: โปรเจกต์ feature map ทั้ง 3 ระดับให้เหลือ channel เท่ากันที่ **256 (hidden_dim)** จากนั้นใช้ self-attention เพียง 1 ชั้น (AIFI-style) ประมวลผล**เฉพาะ feature map ระดับเล็กสุด** (ความละเอียดต่ำสุด, ครอบคลุมบริบทกว้างสุด) เพื่อประหยัดการคำนวณเทียบกับการทำ self-attention บนทุกระดับความละเอียด แล้วจึงหลอมรวม (fuse) ฟีเจอร์ทั้ง 3 ระดับเข้าด้วยกันแบบ CNN-based (คล้าย FPN/PAN) — เป็นที่มาของชื่อ "Hybrid" (ผสมทั้ง attention และ convolution)
 
-### 4.3 YOLO11-S
+**Transformer Decoder**: รับฟีเจอร์ที่หลอมรวมแล้วมาประมวลผลร่วมกับชุด **object query 300 ตัว** ผ่าน decoder จำนวน **3 ชั้น** (self-attention + cross-attention กับฟีเจอร์ภาพ ในแต่ละชั้น) แต่ละชั้นทำนายคลาสและตำแหน่งกรอบออกมาเป็นผลลัพธ์ชั่วคราว (auxiliary prediction) ก่อนส่งต่อไปปรับปรุงในชั้นถัดไป ระหว่างการเทรนมีการเพิ่ม **denoising query** (คำถามเสริมที่สร้างจาก ground truth บวกสัญญาณรบกวนเทียม ตามแนวทาง DN-DETR) เพื่อช่วยให้ Hungarian matching เสถียรขึ้นในช่วงต้นของการเทรน แต่จะถูกถอดออกตอน inference จริง
 
-YOLO11-S มีโครงสร้างแบบ CNN ล้วน แบ่งเป็น 3 ส่วนหลักเช่นกัน: **Backbone**, **Neck** และ **Head** ซึ่งแตกต่างจากแนวทาง DETR-based อย่างสิ้นเชิงทั้งในแง่โครงสร้างและวิธีการทำนาย
+### 4.2 DEIMv2 — จุดต่างจากโครงสร้างร่วม
 
-- **Backbone**: ใช้ block แบบ **C3k2** (แทนที่ C2f ของรุ่นก่อนหน้า YOLOv8) เป็น block CNN ที่ใช้ kernel ขนาดเล็กเพื่อลดจำนวนพารามิเตอร์ ตามด้วย **SPPF (Spatial Pyramid Pooling — Fast)** เพื่อรวบรวมข้อมูลบริบทจากหลาย receptive field และปิดท้ายด้วย **C2PSA (Convolutional block with Parallel Spatial Attention)** ซึ่งเป็นกลไก attention ที่เพิ่มเข้ามาใหม่ในรุ่น YOLO11 ช่วยให้โมเดลโฟกัสบริเวณที่สำคัญของภาพได้ดีขึ้น
-- **Neck**: รวม feature map จากหลายระดับความละเอียดเข้าด้วยกันผ่านการทำ Upsample และ Concatenate โดยใช้ C3k2 block ซ้ำอีกครั้งเพื่อประมวลผล feature ที่รวมแล้วด้วยต้นทุนการคำนวณต่ำ
-- **Head**: เป็นแบบ decoupled head (แยกสาขาทำนายคลาสและตำแหน่งออกจากกัน) ทำนายผลบน feature map หลายระดับพร้อมกัน (multi-scale detection) โดยสาขาทำนายคลาสของ YOLO11 ใช้ depthwise-separable convolution เพื่อลดจำนวนพารามิเตอร์เทียบกับรุ่นก่อนหน้า
+จุดต่างของ DEIMv2 อยู่ที่ **กระบวนการเทรน** ไม่ใช่โครงสร้างโมเดลในหัวข้อ 4.1: ใช้กลยุทธ์ **Dense One-to-One (O2O) matching** เพิ่มจำนวน positive sample ต่อภาพระหว่างเทรนผ่านการเพิ่ม synthetic target ที่มาจาก **mixup และ copy-paste (copyblend) augmentation** (รายละเอียดสัดส่วน/ช่วง epoch ในหัวข้อ 3.4 ตารางเปรียบเทียบ augmentation) ร่วมกับ **Matchability-Aware Loss (MAL)** ที่ปรับน้ำหนัก classification loss ตามคุณภาพการจับคู่ของแต่ละคู่ — ทำให้ DEIMv2 ลู่เข้า (converge) ได้เร็วกว่า DETR ดั้งเดิมโดยไม่ต้องเปลี่ยนโครงสร้างเครือข่าย
+
+### 4.3 D-FINE — จุดต่างจากโครงสร้างร่วม
+
+จุดต่างของ D-FINE อยู่ที่**หัวทำนายตำแหน่งกรอบ**: แทนที่จะทำนายค่าพิกัด (x, y, w, h) โดยตรงแบบ regression เหมือน DETR ทั่วไป D-FINE ใช้เทคนิค **Fine-grained Distribution Refinement (FDR)** ทำนายตำแหน่งขอบแต่ละด้านของกรอบเป็น**การกระจายความน่าจะเป็นแบบไม่ต่อเนื่อง (discrete distribution)** จำนวน 32 bin ต่อด้าน (`reg_max`) แทนค่าตัวเลขเดียว แล้วปรับ (refine) การกระจายนี้แบบ residual ซ้ำในแต่ละ decoder layer ทั้ง 3 ชั้น ทำให้ตำแหน่งกรอบมีความละเอียดสูงขึ้นโดยเฉพาะกรณีขอบวัตถุไม่ชัดเจนหรือถูกบดบัง
+
+นอกจากนี้ D-FINE ใช้เทคนิค **Global Optimal Localization Self-Distillation (GO-LSD)** ให้ decoder layer สุดท้าย (ซึ่งผ่านการ refine มากที่สุด แม่นยำสุด) ทำหน้าที่เป็น "ครู" ถ่ายทอดการกระจายตำแหน่งกรอบที่ปรับแล้วกลับไปยัง decoder layer ตื้นกว่าระหว่างการเทรน (สังเกตได้จาก log การเทรนว่าพจน์ loss ส่วนนี้เริ่มมีค่าไม่เป็นศูนย์เมื่อผ่านไปหลาย epoch — schedule-gated ไม่เปิดใช้ตั้งแต่ต้น) D-FINE ใช้ Hungarian matching แบบมาตรฐาน (ไม่มี Dense O2O เหมือน DEIMv2) และไม่ใช้ augmentation เสริมอย่าง mixup/copy-paste
+
+### 4.4 YOLO11-S
+
+YOLO11-S มีโครงสร้างแบบ CNN ล้วน แบ่งเป็น 3 ส่วนหลัก: **Backbone → Neck → Head** ตรวจสอบโครงสร้างจริงจากการปริ้น layer summary ของโมเดล (`model.info(detailed=True)` บน checkpoint `yolo11s.pt`) ได้ทั้งหมด **181 layer**
+
+**ภาพที่ 5** Overall Architecture ของ YOLO11-S
+
+<!-- TODO: วาด diagram backbone (P1-P5) → neck (PAN) → head จาก layer summary จริง
+     หรือใช้ diagram จาก Ultralytics docs (docs.ultralytics.com/models/yolo11) ปรับ caption
+     ใส่ที่ figures/model_architecture_yolo11.png -->
+
+- **Backbone**: เริ่มจาก stem 2 ชั้น (Conv stride 2 ติดกัน 2 ครั้ง ลดขนาดภาพเหลือ 1/4) ตามด้วยสเตจ **C3k2** (แทนที่ C2f ของ YOLOv8 เดิม — ใช้ split-transform-concat ผ่าน bottleneck ขนาดเล็ก 3×3 เพื่อลดพารามิเตอร์) สลับกับ convolution stride 2 เพื่อลดขนาดภาพลงทีละระดับ (P1→P2→P3→P4→P5, stride รวม 2/4/8/16/32) จนถึง feature map ระดับลึกสุด (P5) จึงผ่าน **SPPF (Spatial Pyramid Pooling — Fast)** รวบรวมบริบทจากหลาย receptive field ด้วย MaxPool ต่อเนื่องกัน 3 ครั้ง และปิดท้ายด้วย **C2PSA** (Convolutional block with Parallel Spatial Attention) ซึ่งเป็น self-attention block ที่เพิ่มเข้ามาใหม่ในรุ่น YOLO11 (ตรวจสอบพบโครงสร้าง attention แบบ qkv projection + positional encoding conv + feed-forward ตรงกับที่คาดไว้)
+- **Neck**: ใช้แนวทาง PAN (Path Aggregation Network) — รวม feature map จาก P5 กับ P4/P3 ผ่านการทำ Upsample+Concat (top-down) แล้วผ่าน C3k2 ซ้ำ จากนั้นทำ downsample+Concat ย้อนกลับ (bottom-up) อีกครั้งเพื่อให้ฟีเจอร์แต่ละระดับได้รับข้อมูลบริบทจากทั้งสองทิศทาง ผลลัพธ์คือ feature map 3 ระดับ (P3/P4/P5) ป้อนเข้า Head
+- **Head**: เป็นแบบ decoupled head (แยกสาขาทำนายคลาสและตำแหน่งกรอบออกจากกัน ทำนายบน feature map ทั้ง 3 ระดับพร้อมกัน) สาขาตำแหน่งกรอบ (`cv2`) ใช้ **Distribution Focal Loss (DFL)** ทำนายการกระจายความน่าจะเป็นของตำแหน่งขอบแบบไม่ต่อเนื่อง 16 bin ต่อด้าน (`reg_max=16`) ในเชิงแนวคิดคล้าย FDR ของ D-FINE แต่เป็นกลไกที่ YOLO ใช้มาตั้งแต่ YOLOv8 สาขาคลาส (`cv3`) ใช้ **depthwise-separable convolution** ลดจำนวนพารามิเตอร์เทียบกับรุ่นก่อนหน้า
+
+*หมายเหตุ*: ตัวเลข 181 layer, 9,458,752 พารามิเตอร์ และ 21.7 GFLOPs ข้างต้นมาจาก checkpoint `yolo11s.pt` ที่ pretrain บน COCO (80 คลาส) ก่อนนำมา fine-tune บน PIDray โครงสร้าง backbone/neck ทั้งหมดเหมือนกันทุกประการ แต่หัวคลาส (`cv3`) ของโมเดลที่เทรนจริงมี output 12 คลาส (ไม่ใช่ 80) จึงมีพารามิเตอร์/GFLOPs น้อยกว่าเล็กน้อย ตรงกับตัวเลขที่บันทึกไว้จริงหลัง fine-tune (~9.4M พารามิเตอร์, 21.3 GFLOPs — ตารางที่ 3)
 
 ต่างจาก DEIMv2/D-FINE ที่ทำนายแบบ end-to-end ไม่ต้อง post-processing, YOLO11-S ใช้การทำนายแบบ **anchor-free grid-based** (แต่ละตำแหน่งบน feature map ทำนายกรอบได้โดยตรง ไม่ต้องอิง anchor box ที่กำหนดไว้ล่วงหน้า) ซึ่งมักทำนายกรอบซ้ำซ้อนหลายกรอบต่อวัตถุหนึ่งชิ้น จึงจำเป็นต้องมีขั้นตอน **Non-Maximum Suppression (NMS)** หลังการทำนายเพื่อคัดกรองเหลือเพียงกรอบที่ดีที่สุดต่อวัตถุ — ขั้นตอนนี้เองที่งานวิจัยกลุ่ม DETR มักหยิบยกเป็นจุดด้อยเชิงทฤษฎีของแนวทาง CNN one-stage (NMS ต้องอาศัยการตั้งค่า threshold ที่ไม่ได้เรียนรู้ร่วมกับโมเดล) แม้ในทางปฏิบัติจะทำงานได้ดีในหลายสถานการณ์
 
-### 4.4 ข้อสังเกตเชิงสถาปัตยกรรมที่เชื่อมโยงกับผลการทดลอง
+### 4.5 ข้อสังเกตเชิงสถาปัตยกรรมที่เชื่อมโยงกับผลการทดลอง
 
 ความแตกต่างเชิงสถาปัตยกรรมที่สำคัญที่สุดสำหรับการตีความผลการทดลอง (หัวข้อ Experimental Results) คือกลไกการจับคู่ผลทำนายกับ ground truth: **Hungarian/Dense-O2O matching** ของ DEIMv2/D-FINE เทียบกับ **grid-based assignment + NMS** ของ YOLO11-S ในสภาวะที่วัตถุซ้อนทับกันหนาแน่นหรือถูกซ่อนอย่างจงใจ (เช่นชุดทดสอบ Hidden ของ PIDray) กลไกทั้งสองแบบอาจตอบสนองต่างกัน — ประเด็นนี้จะถูกนำมาอภิปรายอย่างละเอียดพร้อมหลักฐานเชิงประจักษ์ (TIDE error breakdown) ในหัวข้อ Experimental Results
 
@@ -184,7 +205,7 @@ $$\hat{\sigma} = \arg\min_{\sigma \in \mathfrak{S}_N} \sum_{i=1}^{N} \mathcal{C}
 - **D-FINE** ใช้ bipartite matching แบบมาตรฐาน (การจับคู่คงที่ 1 ผลทำนายต่อ 1 ground truth ต่อ 1 forward pass)
 - **DEIMv2** ปรับปรุงจุดนี้ด้วย **Dense One-to-One (O2O) matching** — เพิ่มจำนวน positive sample ที่ใช้เทรนต่อภาพ โดยสร้าง target เพิ่มเติมผ่านเทคนิค data augmentation แบบมาตรฐาน (ไม่ใช่การเปลี่ยนเป็น one-to-many matching แบบ DETR รุ่นอื่นที่ต้องพึ่ง NMS) ทำให้จำนวน positive sample ต่อการเทรนหนึ่งครั้งหนาแน่นขึ้นโดยไม่เสียคุณสมบัติ end-to-end
 
-**YOLO11-S** ไม่ใช้ Hungarian matching แต่ใช้ **Task-Aligned Assigner (TAL)** ซึ่งกำหนดว่าตำแหน่งใดบน feature map (grid cell) ควรเป็น positive sample สำหรับวัตถุใด โดยพิจารณาจากคะแนนรวมของทั้งความมั่นใจในการจำแนกคลาสและความแม่นยำของตำแหน่ง (IoU) พร้อมกัน แต่ละวัตถุจริงสามารถมีตำแหน่ง positive ได้หลายตำแหน่ง (one-to-many) จึงจำเป็นต้องมี NMS ในขั้นตอนหลังเพื่อคัดกรองกรอบซ้ำซ้อนออก ตามที่กล่าวไว้ในหัวข้อ 4.3
+**YOLO11-S** ไม่ใช้ Hungarian matching แต่ใช้ **Task-Aligned Assigner (TAL)** ซึ่งกำหนดว่าตำแหน่งใดบน feature map (grid cell) ควรเป็น positive sample สำหรับวัตถุใด โดยพิจารณาจากคะแนนรวมของทั้งความมั่นใจในการจำแนกคลาสและความแม่นยำของตำแหน่ง (IoU) พร้อมกัน แต่ละวัตถุจริงสามารถมีตำแหน่ง positive ได้หลายตำแหน่ง (one-to-many) จึงจำเป็นต้องมี NMS ในขั้นตอนหลังเพื่อคัดกรองกรอบซ้ำซ้อนออก ตามที่กล่าวไว้ในหัวข้อ 4.4
 
 ### 5.2 Loss Function ของ DEIMv2 และ D-FINE
 
@@ -196,7 +217,7 @@ $$\mathcal{L}_{\text{total}} = \lambda_{\text{cls}} \mathcal{L}_{\text{cls}} + \
 
 - **$\mathcal{L}_{\text{cls}}$ — Varifocal Loss (VFL)**: ใช้แทน cross-entropy ทั่วไป โดยถ่วงน้ำหนัก loss ของแต่ละ sample ด้วยคุณภาพ IoU ระหว่างกรอบทำนายกับ ground truth ทำให้โมเดลเรียนรู้ที่จะให้คะแนนความมั่นใจสอดคล้องกับความแม่นยำของตำแหน่งกรอบมากขึ้น (มีผลโดยตรงต่อ ECE ที่วัดในหัวข้อ Experimental Results) ในกรณีของ DEIMv2 พจน์นี้ถูกปรับเพิ่มเติมด้วยแนวคิด **Matchability-Aware Loss (MAL)** ที่ถ่วงน้ำหนักตามคุณภาพการจับคู่ของแต่ละคู่ ซึ่งเข้ากันได้ดีกับกลยุทธ์ Dense O2O matching ที่มี positive sample หนาแน่นขึ้น
 - **$\mathcal{L}_{\text{L1}}$ และ $\mathcal{L}_{\text{GIoU}}$**: loss มาตรฐานสำหรับตำแหน่งกรอบ ได้แก่ L1 distance ของพิกัดกรอบ และ Generalized IoU ที่แก้ปัญหา IoU ธรรมดาไม่มี gradient เมื่อกรอบไม่ซ้อนทับกันเลย
-- **$\mathcal{L}_{\text{FDR}}$ (loss_fgl ในระบบ log)**: พจน์เฉพาะของ D-FINE/DEIMv2 ที่คำนวณจากการทำนายการกระจายความน่าจะเป็นของตำแหน่งขอบกรอบ (แทนค่าพิกัดเดียว) ตามที่อธิบายไว้ในหัวข้อ 4.2 — เป็นหนึ่งใน 4 ไฮเปอร์พารามิเตอร์หลักที่ปรับจูนด้วย Optuna HPO ในการทดลองนี้ (น้ำหนัก $\lambda_{\text{fgl}}$)
+- **$\mathcal{L}_{\text{FDR}}$ (loss_fgl ในระบบ log)**: พจน์เฉพาะของ D-FINE/DEIMv2 ที่คำนวณจากการทำนายการกระจายความน่าจะเป็นของตำแหน่งขอบกรอบ (แทนค่าพิกัดเดียว) ตามที่อธิบายไว้ในหัวข้อ 4.3 — เป็นหนึ่งใน 4 ไฮเปอร์พารามิเตอร์หลักที่ปรับจูนด้วย Optuna HPO ในการทดลองนี้ (น้ำหนัก $\lambda_{\text{fgl}}$)
 - **Self-distillation loss (loss_ddf)**: เฉพาะ D-FINE/DEIMv2 ที่ใช้ GO-LSD — decoder layer สุดท้าย (แม่นยำที่สุด) ทำหน้าที่เป็น teacher ถ่ายทอด soft label ของการกระจายตำแหน่งขอบให้ decoder layer ตื้นกว่าระหว่างการเทรน สังเกตได้จาก log ว่าพจน์นี้เริ่มปรากฏค่าไม่เป็นศูนย์เมื่อเทรนผ่านไปหลาย epoch (schedule-gated ไม่ได้เปิดใช้ตั้งแต่ epoch แรก)
 
 ### 5.3 Loss Function ของ YOLO11-S
