@@ -21,5 +21,6 @@ for split in easy hard hidden; do
       "results/predictions/phase5/dfine_${split}_seed${DFINE_SEED[$split]}.json:D-FINE" \
       "results/predictions/phase5/deimv2_${split}_seed${DEIMV2_SEED[$split]}.json:DEIMv2" \
       "results/predictions/phase5/yolo11_${split}_seed${YOLO11_SEED[$split]}.json:YOLO11" \
-    --out-dir "results/tide/phase5_${split}"
+    --out-dir "results/tide/phase5_${split}" \
+    | tee "results/tide/phase5_${split}_summary.txt"
 done
