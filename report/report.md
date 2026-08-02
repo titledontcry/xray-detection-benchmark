@@ -149,10 +149,10 @@ DEIMv2 และ D-FINE ในการทดลองนี้ใช้โค�
 
 ### 4.1 โครงสร้างร่วมของ DEIMv2 และ D-FINE
 
-**ภาพที่ 4** Overall Architecture ของ DEIMv2/D-FINE (HGNetV2-B0 + HybridEncoder + Transformer Decoder)
+**ภาพที่ 4** กลไก decoder แบบ iterative refinement ของ D-FINE/DEIMv2 — แต่ละ decoder layer ทำนาย "การกระจายความน่าจะเป็น" ของตำแหน่งขอบกรอบ (Refined Distributions) แล้วปรับน้ำหนัก (Weighted Distributions) รวมเป็น Edge Offsets เพื่อขยับกรอบให้แม่นยำขึ้นทีละชั้น (Decoder Layer 1→2→3) — DEIMv2 สืบทอดกลไก decoder แบบเดียวกันนี้มาจาก D-FINE ทุกประการ (หัวข้อ 4.1) ต่างกันเฉพาะกลยุทธ์การจับคู่/loss ระหว่างเทรนเท่านั้น (หัวข้อ 4.2/4.3)
+*ที่มา: ดัดแปลงจาก Peng et al., 2024 — D-FINE: Redefine Regression Task in DETRs as Fine-grained Distribution Refinement (arXiv:2410.13842)*
 
-<!-- TODO: วาด diagram หรือนำรูปจาก paper ต้นฉบับ (D-FINE ICLR 2025 / DEIM CVPR 2025, arXiv:2410.13842 และ arXiv:2412.04234)
-     มาปรับให้ตรงกับ config จริงที่ใช้ (B0/S scale, decoder 3 ชั้น) แล้วใส่ที่ figures/model_architecture_detr.png -->
+![Decoder refinement mechanism ของ D-FINE/DEIMv2](figures/dfine_fdr.png)
 
 **Backbone — HGNetV2-B0**: รับภาพขนาด 640×640 พิกเซล (หลัง CLAHE + resize) ประมวลผลผ่าน Stem block (convolution สกัดฟีเจอร์เบื้องต้น) ตามด้วยโครงสร้างแบบ 4 สเตจปิรามิด (HG_Stage) แต่ละสเตจประกอบด้วย HG_Block หลายตัวเรียงต่อกัน ลดขนาดความละเอียดภาพลงทีละสเตจในขณะที่จำนวน channel เพิ่มขึ้น การทดลองนี้ดึงฟีเจอร์ออกจาก **สเตจที่ 1, 2 และ 3** (`return_idx: [1, 2, 3]`) เป็น feature map 3 ระดับ ขนาด channel **256, 512 และ 1024** ตามลำดับ ส่งต่อให้ HybridEncoder
 

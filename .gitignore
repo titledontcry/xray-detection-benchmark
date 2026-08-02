@@ -9,6 +9,9 @@ data/sixray/
 *.png
 !assets/**/*.png
 !assets/**/*.jpg
+!report/figures/**/*.png
+!report/figures/**/*.jpg
+report/figures/_candidates_*/
 
 # === Third-party model repos (cloned fresh per machine by scripts/setup_env.sh) ===
 third_party/
